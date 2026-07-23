@@ -1,0 +1,84 @@
+@model EquipmentIMS.Web.Models.RepairOrderViewModel
+@{
+    ViewData["Title"] = "新建维修工单";
+}
+
+<div class="content-card" style="max-width:720px">
+    <div class="content-header">
+        <h4>@ViewData["Title"]</h4>
+        <a asp-action="Index" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i>返回</a>
+    </div>
+
+    <form asp-action="Create" method="post">
+        @Html.AntiForgeryToken()
+
+        <div class="row g-3">
+            <div class="col-12">
+                <label class="form-label fw-bold">选择设备档案 <span class="text-danger">*</span></label>
+                <select id="deviceArchiveSelect" class="form-select" style="width:100%">
+                    <option value="">-- 输入序列号搜索设备 --</option>
+                </select>
+                <input type="hidden" asp-for="DeviceArchiveId" id="DeviceArchiveId" />
+                <span asp-validation-for="DeviceArchiveId" class="text-danger small"></span>
+                <div id="archiveInfo" class="mt-2 small text-muted" style="display:none"></div>
+            </div>
+
+            <div class="col-md-6">
+                <label asp-for="FaultType" class="form-label"></label>
+                <input asp-for="FaultType" class="form-control" placeholder="如：硬件故障、软件故障" />
+            </div>
+            <div class="col-12">
+                <label asp-for="FaultDesc" class="form-label"></label>
+                <textarea asp-for="FaultDesc" class="form-control" rows="4" placeholder="请详细描述故障现象"></textarea>
+                <span asp-validation-for="FaultDesc" class="text-danger small"></span>
+            </div>
+            <div class="col-12">
+                <label asp-for="Remark" class="form-label"></label>
+                <textarea asp-for="Remark" class="form-control" rows="2"></textarea>
+            </div>
+        </div>
+
+        <div class="mt-4">
+            <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg me-1"></i>创建工单</button>
+            <a asp-action="Index" class="btn btn-outline-secondary ms-2">取消</a>
+        </div>
+    </form>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    <script>
+        $(function () {
+            $('#deviceArchiveSelect').select2({
+                placeholder: '输入序列号搜索设备...',
+                minimumInputLength: 1,
+                ajax: {
+                    url: '@Url.Action("SearchDeviceArchives")',
+                    dataType: 'json',
+                    delay: 300,
+                    data: function (params) { return { term: params.term }; },
+                    processResults: function (data) { return { results: data.results }; }
+                }
+            }).on('select2:select', function (e) {
+                var id = e.params.data.id;
+                $('#DeviceArchiveId').val(id);
+                loadArchiveInfo(id);
+            }).on('select2:clear', function () {
+                $('#DeviceArchiveId').val('');
+                $('#archiveInfo').hide();
+            });
+        });
+
+        function loadArchiveInfo(archiveId) {
+            fetch('@Url.Action("GetArchiveInfo")' + '?id=' + archiveId)
+                .then(r => r.json())
+                .then(d => {
+                    if (d.success) {
+                        var a = d.data;
+                        var w = a.isWarranty ? '<span class="badge bg-success ms-1">保修期内</span>' : '<span class="badge bg-secondary ms-1">已过保</span>';
+                        $('#archiveInfo').html('<strong>' + a.serialNo + '</strong> - ' + a.productName + ' | 客户: ' + a.customerName + w).show();
+                    }
+                });
+        }
+    </script>
+}

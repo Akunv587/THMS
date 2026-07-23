@@ -1,0 +1,83 @@
+@model PagedResult<EquipmentIMS.Models.DTOs.UserListDto>
+@{
+    ViewData["Title"] = "用户管理";
+    var keyword = ViewData["Keyword"] as string;
+}
+
+<div class="content-card">
+    <div class="content-header">
+        <h4><i class="bi bi-people me-2"></i>用户管理</h4>
+        <a asp-action="Create" class="btn btn-primary btn-sm"><i class="bi bi-plus-lg me-1"></i>新增用户</a>
+    </div>
+
+    <form class="search-bar" method="get" asp-action="Index">
+        <input type="text" name="keyword" class="form-control" placeholder="用户名/姓名" value="@keyword" />
+        <button type="submit" class="btn btn-outline-secondary"><i class="bi bi-search me-1"></i>搜索</button>
+    </form>
+
+    @if (TempData["Message"] != null)
+    {
+        <div class="alert alert-success alert-dismissible fade show" role="alert">
+            @TempData["Message"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    }
+
+    <div class="table-responsive">
+        <table class="table data-table">
+            <thead><tr>
+                <th>用户名</th><th>姓名</th><th>邮箱</th><th>电话</th><th>角色</th><th>状态</th><th>最后登录</th><th>创建时间</th><th style="width:260px">操作</th>
+            </tr></thead>
+            <tbody>
+                @if (!Model.Items.Any())
+                {
+                    <tr><td colspan="9" class="text-center text-muted py-4">暂无数据</td></tr>
+                }
+                @foreach (var item in Model.Items)
+                {
+                    <tr>
+                        <td>@item.UserName</td>
+                        <td>@item.RealName</td>
+                        <td>@item.Email</td>
+                        <td>@item.Phone</td>
+                        <td>@string.Join(", ", item.Roles)</td>
+                        <td>
+                            @if (item.IsActive)
+                            {
+                                <span class="badge bg-success">启用</span>
+                            }
+                            else
+                            {
+                                <span class="badge bg-secondary">禁用</span>
+                            }
+                        </td>
+                        <td>@(item.LastLoginTime?.ToString("yyyy-MM-dd HH:mm") ?? "-")</td>
+                        <td>@item.CreateTime.ToString("yyyy-MM-dd")</td>
+                        <td>
+                            <a asp-action="Edit" asp-route-id="@item.Id" class="btn btn-sm btn-outline-primary" title="编辑"><i class="bi bi-pencil"></i></a>
+                            <a asp-action="AssignRoles" asp-route-id="@item.Id" class="btn btn-sm btn-outline-info" title="分配角色"><i class="bi bi-person-check"></i></a>
+                            <form asp-action="ResetPassword" asp-route-id="@item.Id" method="post" class="d-inline" onsubmit="return confirm('确认重置密码为 123456？')">
+                                @Html.AntiForgeryToken()
+                                <button type="submit" class="btn btn-sm btn-outline-warning" title="重置密码"><i class="bi bi-key"></i></button>
+                            </form>
+                            <form asp-action="ToggleActive" asp-route-id="@item.Id" method="post" class="d-inline">
+                                @Html.AntiForgeryToken()
+                                <button type="submit" class="btn btn-sm @(item.IsActive ? "btn-outline-secondary" : "btn-outline-success")" title="@(item.IsActive ? "禁用" : "启用")">
+                                    <i class="bi @(item.IsActive ? "bi-toggle-on" : "bi-toggle-off")"></i>
+                                </button>
+                            </form>
+                            <form asp-action="Delete" asp-route-id="@item.Id" method="post" class="d-inline" onsubmit="return confirm('确认删除该用户？')">
+                                @Html.AntiForgeryToken()
+                                <button type="submit" class="btn btn-sm btn-outline-danger" title="删除"><i class="bi bi-trash"></i></button>
+                            </form>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+
+    @{
+        @await Html.PartialAsync("_Pager")
+    }
+</div>

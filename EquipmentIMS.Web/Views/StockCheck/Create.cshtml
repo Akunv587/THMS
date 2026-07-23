@@ -1,0 +1,59 @@
+@model StockCheckCreateDto
+@{
+    ViewData["Title"] = "新建盘点";
+    var warehouseList = ViewData["WarehouseList"] as SelectList;
+}
+
+<div class="content-card">
+    <div class="content-header">
+        <h4><i class="bi bi-clipboard-plus me-2"></i>新建盘点</h4>
+    </div>
+
+    <div class="row">
+        <div class="col-md-6">
+            <form asp-action="Create" method="post">
+                <div asp-validation-summary="ModelOnly" class="alert alert-danger"></div>
+
+                <div class="mb-3">
+                    <label class="form-label">盘点仓库 <span class="text-danger">*</span></label>
+                    <select asp-for="WarehouseId" class="form-select">
+                        <option value="">-- 请选择仓库 --</option>
+                        @if (warehouseList != null)
+                        {
+                            @foreach (var item in warehouseList)
+                            {
+                                <option value="@item.Value">@item.Text</option>
+                            }
+                        }
+                    </select>
+                    <span asp-validation-for="WarehouseId" class="text-danger small"></span>
+                    <div class="form-text">选择仓库后将自动生成该仓库所有库存记录的快照</div>
+                </div>
+
+                <div class="mb-3">
+                    <label asp-for="Remark" class="form-label">备注</label>
+                    <textarea asp-for="Remark" class="form-control" rows="3" placeholder="可选，填写盘点说明"></textarea>
+                </div>
+
+                <div class="alert alert-info">
+                    <i class="bi bi-info-circle me-2"></i>
+                    创建盘点单后系统将自动：
+                    <ul class="mb-0 mt-1">
+                        <li>生成该仓库所有库存的当前快照</li>
+                        <li>标记盘点中的设备为冻结状态</li>
+                        <li>盘点冻结仅影响盘点中的设备，其他设备可正常出入库</li>
+                    </ul>
+                </div>
+
+                <div class="d-flex gap-2">
+                    <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg me-1"></i>创建盘点单</button>
+                    <a asp-action="Index" class="btn btn-outline-secondary">返回列表</a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

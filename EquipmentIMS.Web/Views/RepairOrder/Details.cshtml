@@ -1,0 +1,230 @@
+@model EquipmentIMS.Models.DTOs.RepairOrderDto
+@{
+    ViewData["Title"] = "工单详情 - " + Model.OrderNo;
+    var archive = ViewData["Archive"] as EquipmentIMS.Models.DTOs.DeviceArchiveDto;
+    var canOperate = (bool)(ViewData["CanOperate"] ?? false);
+    var isWarranty = archive?.WarrantyEnd.HasValue == true && archive.WarrantyEnd.Value >= DateTime.Today;
+}
+
+<div class="content-card" style="max-width:960px">
+    <div class="content-header">
+        <h4>@ViewData["Title"]</h4>
+        <div>
+            <a asp-action="Index" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i>返回</a>
+            @if (canOperate)
+            {
+                @if (Model.Status == 0)
+                {
+                    <a asp-action="Dispatch" asp-route-id="@Model.Id" class="btn btn-info btn-sm ms-1"><i class="bi bi-person-check me-1"></i>派工</a>
+                }
+                @if (Model.Status == 1)
+                {
+                    <form asp-action="StartRepair" method="post" class="d-inline ms-1" onsubmit="return confirm('确认开始维修？')">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="id" value="@Model.Id" />
+                        <button type="submit" class="btn btn-warning btn-sm"><i class="bi bi-play-circle me-1"></i>开始维修</button>
+                    </form>
+                }
+                @if (Model.Status == 2)
+                {
+                    <a asp-action="Process" asp-route-id="@Model.Id" class="btn btn-warning btn-sm ms-1"><i class="bi bi-wrench me-1"></i>维修处理</a>
+                }
+                @if (Model.Status == 3)
+                {
+                    <form asp-action="Confirm" method="post" class="d-inline ms-1" onsubmit="return confirm('确认完工？')">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="id" value="@Model.Id" />
+                        <button type="submit" class="btn btn-success btn-sm"><i class="bi bi-check-circle me-1"></i>确认完工</button>
+                    </form>
+                }
+                @if (Model.Status == 4)
+                {
+                    <form asp-action="Close" method="post" class="d-inline ms-1" onsubmit="return confirm('确认关闭归档？关闭后不可再操作。')">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="id" value="@Model.Id" />
+                        <button type="submit" class="btn btn-secondary btn-sm"><i class="bi bi-archive me-1"></i>关闭归档</button>
+                    </form>
+                }
+                @if (Model.Status != 5 && Model.Status != 6)
+                {
+                    <form asp-action="Cancel" method="post" class="d-inline ms-1" onsubmit="return confirm('确认取消该工单？设备将恢复为正常状态。')">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="id" value="@Model.Id" />
+                        <button type="submit" class="btn btn-outline-danger btn-sm"><i class="bi bi-x-circle me-1"></i>取消</button>
+                    </form>
+                }
+            }
+        </div>
+    </div>
+
+    @if (Model.Status == 0 && Model.IsWarranty)
+    {
+        <div class="alert alert-success py-2 mb-3"><i class="bi bi-shield-check me-1"></i>该设备在保修期内，本次维修免费。</div>
+    }
+
+    @* 状态时间线 *@
+    <div class="card border-0 shadow-sm mb-3">
+        <div class="card-header bg-light fw-bold"><i class="bi bi-arrow-repeat me-1"></i>状态流转</div>
+        <div class="card-body py-2">
+            <div class="d-flex flex-wrap gap-2 align-items-center">
+                @{
+                    var timelineSteps = new[] {
+                        new { Status = 0, Label = "待派工" },
+                        new { Status = 1, Label = "已派工" },
+                        new { Status = 2, Label = "维修中" },
+                        new { Status = 3, Label = "待确认" },
+                        new { Status = 4, Label = "已完工" },
+                        new { Status = 5, Label = "已关闭" },
+                        new { Status = 6, Label = "已取消" }
+                    };
+                    var isCancelled = Model.Status == 6;
+                    var showFinal = false;
+                }
+                @for (int i = 0; i < timelineSteps.Length; i++)
+                {
+                    @if (showFinal) { break; }
+                    var step = timelineSteps[i];
+                    var badgeClass = "bg-light text-dark";
+                    if (isCancelled && step.Status == 6) { badgeClass = "bg-dark"; }
+                    else if (!isCancelled && Model.Status >= step.Status) { badgeClass = "bg-primary"; }
+
+                    <span class="badge @badgeClass">@step.Label</span>
+                    @if (i < 6)
+                    {
+                        <i class="bi bi-chevron-right text-muted small"></i>
+                    }
+                    @if (!isCancelled && step.Status == Model.Status) { showFinal = true; }
+                    @if (isCancelled && step.Status == 6) { showFinal = true; }
+                }
+            </div>
+            @if (Model.CompleteTime.HasValue)
+            {
+                <small class="text-muted d-block mt-2">完工时间：@Model.CompleteTime.Value.ToString("yyyy-MM-dd HH:mm")</small>
+            }
+        </div>
+    </div>
+
+    @* 卡片区 *@
+    <div class="row g-3">
+        <div class="col-md-6">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-light fw-bold"><i class="bi bi-info-circle me-1"></i>工单信息</div>
+                <div class="card-body p-0">
+                    <table class="table table-bordered mb-0">
+                        <tr><td class="bg-light fw-bold" style="width:100px">工单号</td><td><span class="fw-medium">@Model.OrderNo</span></td></tr>
+                        <tr><td class="bg-light fw-bold">故障类型</td><td>@(Model.FaultType ?? "-")</td></tr>
+                        <tr><td class="bg-light fw-bold">故障描述</td><td>@Model.FaultDesc</td></tr>
+                        <tr><td class="bg-light fw-bold">状态</td><td>
+                            @{
+                                var sbCls = Model.Status switch
+                                {
+                                    0 or 1 => "bg-info",
+                                    2 => "bg-warning text-dark",
+                                    3 => "bg-primary",
+                                    4 => "bg-success",
+                                    5 => "bg-secondary",
+                                    6 => "bg-dark",
+                                    _ => "bg-light text-dark"
+                                };
+                            }
+                            <span class="badge @sbCls">@Model.StatusName</span>
+                        </td></tr>
+                        <tr><td class="bg-light fw-bold">技术员</td><td>@(Model.TechnicianName ?? "未指派")</td></tr>
+                        <tr><td class="bg-light fw-bold">派工时间</td><td>@(Model.AssignTime?.ToString("yyyy-MM-dd HH:mm") ?? "-")</td></tr>
+                        <tr><td class="bg-light fw-bold">创建时间</td><td>@Model.CreateTime.ToString("yyyy-MM-dd HH:mm")</td></tr>
+                        <tr><td class="bg-light fw-bold">备注</td><td>@(Model.Remark ?? "-")</td></tr>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-light fw-bold">
+                    <i class="bi bi-pc-display me-1"></i>设备档案
+                    @if (archive?.WarrantyEnd.HasValue == true)
+                    {
+                        @if (archive.WarrantyEnd.Value >= DateTime.Today)
+                        {<span class="badge bg-success ms-2">保修期内</span>}
+                        else
+                        {<span class="badge bg-danger ms-2">已过保</span>}
+                    }
+                </div>
+                <div class="card-body p-0">
+                    <table class="table table-bordered mb-0">
+                        <tr><td class="bg-light fw-bold" style="width:100px">序列号</td><td><span class="fw-medium">@Model.SerialNo</span></td></tr>
+                        <tr><td class="bg-light fw-bold">客户</td><td>@Model.CustomerName</td></tr>
+                        <tr><td class="bg-light fw-bold">保修开始</td><td>@(archive?.WarrantyStart?.ToString("yyyy-MM-dd") ?? "-")</td></tr>
+                        <tr><td class="bg-light fw-bold">保修截止</td><td>@(archive?.WarrantyEnd?.ToString("yyyy-MM-dd") ?? "-")</td></tr>
+                    </table>
+                </div>
+            </div>
+
+            <div class="card border-0 shadow-sm mt-3">
+                <div class="card-header bg-light fw-bold"><i class="bi bi-cash-stack me-1"></i>费用明细</div>
+                <div class="card-body p-0">
+                    <table class="table table-bordered mb-0">
+                        <tr><td class="bg-light fw-bold" style="width:100px">是否保修</td><td>@(Model.IsWarranty ? "是（免费）" : "否")</td></tr>
+                        <tr><td class="bg-light fw-bold">维修费</td><td>@Model.RepairCost.ToString("F2")</td></tr>
+                        <tr><td class="bg-light fw-bold">配件费</td><td>@Model.PartsCost.ToString("F2")</td></tr>
+                        <tr><td class="bg-light fw-bold">工时</td><td>@Model.WorkHours.ToString("F1") 小时</td></tr>
+                        <tr class="table-primary"><td class="fw-bold">总费用</td><td><strong>@Model.TotalCost.ToString("F2")</strong></td></tr>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @* 维修记录 *@
+    @if (!string.IsNullOrEmpty(Model.RepairDesc))
+    {
+        <div class="card border-0 shadow-sm mt-3">
+            <div class="card-header bg-light fw-bold"><i class="bi bi-journal-text me-1"></i>维修记录</div>
+            <div class="card-body">
+                <pre class="mb-0" style="white-space:pre-wrap;font-family:inherit">@Model.RepairDesc</pre>
+            </div>
+        </div>
+    }
+
+    @* 配件明细 *@
+    <div class="card border-0 shadow-sm mt-3">
+        <div class="card-header bg-light fw-bold">
+            <i class="bi bi-box-seam me-1"></i>配件明细
+            <span class="badge bg-primary ms-2">@(Model.Parts?.Count ?? 0) 条</span>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-striped mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>配件</th>
+                            <th>仓库</th>
+                            <th>数量</th>
+                            <th>单价</th>
+                            <th>金额</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (Model.Parts == null || !Model.Parts.Any())
+                        {
+                            <tr><td colspan="5" class="text-center text-muted py-3">无配件领用记录</td></tr>
+                        }
+                        else
+                        {
+                            @foreach (var part in Model.Parts)
+                            {
+                                <tr>
+                                    <td>@part.ProductCode - @part.ProductName</td>
+                                    <td>@part.WarehouseId</td>
+                                    <td>@part.Qty</td>
+                                    <td>@part.UnitPrice.ToString("F2")</td>
+                                    <td>@part.Amount.ToString("F2")</td>
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>

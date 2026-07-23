@@ -1,0 +1,158 @@
+@model EquipmentIMS.Web.Models.ProcessViewModel
+@{
+    ViewData["Title"] = "维修处理";
+    var parts = ViewData["Parts"] as List<EquipmentIMS.Models.DTOs.RepairPartDto>;
+    var productList = ViewData["ProductList"] as SelectList;
+    var warehouseList = ViewData["WarehouseList"] as SelectList;
+}
+
+<div class="content-card" style="max-width:860px">
+    <div class="content-header">
+        <h4><i class="bi bi-wrench me-2"></i>维修处理</h4>
+        <a asp-action="Details" asp-route-id="@Model.OrderId" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i>返回</a>
+    </div>
+
+    <form asp-action="Process" method="post" id="processForm">
+        @Html.AntiForgeryToken()
+        <input type="hidden" asp-for="OrderId" />
+
+        <div class="row g-3">
+            <div class="col-12">
+                <label asp-for="RepairDesc" class="form-label fw-bold"></label>
+                <textarea asp-for="RepairDesc" class="form-control" rows="4" placeholder="描述维修过程和解决方案"></textarea>
+                <span asp-validation-for="RepairDesc" class="text-danger small"></span>
+            </div>
+            <div class="col-md-6">
+                <label asp-for="WorkHours" class="form-label fw-bold"></label>
+                <input asp-for="WorkHours" type="number" step="0.5" class="form-control" />
+            </div>
+            <div class="col-md-6">
+                <label asp-for="RepairCost" class="form-label fw-bold"></label>
+                <input asp-for="RepairCost" type="number" step="0.01" class="form-control" />
+            </div>
+        </div>
+
+        <div class="mt-4">
+            <button type="submit" class="btn btn-primary" onclick="return confirm('确认维修完成？')"><i class="bi bi-check-circle me-1"></i>维修完成</button>
+            <a asp-action="Details" asp-route-id="@Model.OrderId" class="btn btn-outline-secondary ms-2">取消</a>
+        </div>
+    </form>
+
+    <hr class="my-4" />
+
+    <h5 class="mb-3"><i class="bi bi-box-seam me-2"></i>配件领用</h5>
+
+    <div class="card bg-light border mb-3">
+        <div class="card-body">
+            <div class="row g-2 align-items-end">
+                <div class="col-md-3">
+                    <label class="form-label small">配件</label>
+                    <select id="partProduct" class="form-select" asp-items="productList">
+                        <option value="">-- 选择 --</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small">仓库</label>
+                    <select id="partWarehouse" class="form-select" asp-items="warehouseList">
+                        <option value="">-- 选择 --</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small">数量</label>
+                    <input id="partQty" type="number" class="form-control" min="1" value="1" />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small">可用库存</label>
+                    <input id="partStock" class="form-control" readonly value="-" />
+                </div>
+                <div class="col-md-2">
+                    <button type="button" class="btn btn-outline-primary w-100" onclick="addPart()"><i class="bi bi-plus-lg me-1"></i>领用</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="table-responsive">
+        <table class="table table-striped">
+            <thead class="table-light">
+                <tr>
+                    <th>配件</th>
+                    <th>仓库</th>
+                    <th>数量</th>
+                    <th>单价</th>
+                    <th>金额</th>
+                </tr>
+            </thead>
+            <tbody id="partsTableBody">
+                @if (parts != null && parts.Any())
+                {
+                    @foreach (var p in parts)
+                    {
+                        <tr>
+                            <td>@p.ProductName</td>
+                            <td>@p.WarehouseId</td>
+                            <td>@p.Qty</td>
+                            <td>@p.UnitPrice.ToString("F2")</td>
+                            <td>@p.Amount.ToString("F2")</td>
+                        </tr>
+                    }
+                }
+                else
+                {
+                    <tr id="noPartsRow"><td colspan="5" class="text-center text-muted py-3">暂无领用记录</td></tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        $('#partProduct, #partWarehouse').on('change', function () {
+            var pid = $('#partProduct').val();
+            var wid = $('#partWarehouse').val();
+            if (pid && wid) {
+                fetch('@Url.Action("GetStockInfo")' + '?productId=' + pid + '&warehouseId=' + wid)
+                    .then(r => r.json())
+                    .then(d => {
+                        if (d.success) {
+                            $('#partStock').val(d.data.available);
+                            if (d.data.available <= 0) $('#partStock').addClass('text-danger');
+                            else $('#partStock').removeClass('text-danger');
+                        }
+                    });
+            } else {
+                $('#partStock').val('-');
+            }
+        });
+
+        function addPart() {
+            var pid = $('#partProduct').val();
+            var wid = $('#partWarehouse').val();
+            var qty = parseInt($('#partQty').val()) || 0;
+            if (!pid) { alert('请选择配件'); return; }
+            if (!wid) { alert('请选择仓库'); return; }
+            if (qty <= 0) { alert('数量必须大于0'); return; }
+
+            var formData = new FormData();
+            formData.append('orderId', '@Model.OrderId');
+            formData.append('productId', pid);
+            formData.append('warehouseId', wid);
+            formData.append('qty', qty);
+
+            fetch('@Url.Action("AddRepairPart")', {
+                method: 'POST',
+                headers: { 'RequestVerificationToken': document.querySelector('input[name="__RequestVerificationToken"]').value },
+                body: new URLSearchParams(formData)
+            })
+            .then(r => r.json())
+            .then(d => {
+                if (d.success) {
+                    location.reload();
+                } else {
+                    alert(d.message);
+                }
+            });
+        }
+    </script>
+}

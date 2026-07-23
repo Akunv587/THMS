@@ -1,0 +1,66 @@
+@model PagedResult<EquipmentIMS.Models.DTOs.SaleOutListDto>
+@{
+    ViewData["Title"] = "销售出库管理";
+    var query = ViewData["Query"] as EquipmentIMS.Web.Models.SaleOutQueryViewModel;
+}
+
+<div class="content-card">
+    <div class="content-header">
+        <h4><i class="bi bi-truck me-2"></i>销售出库管理</h4>
+        <a asp-action="Create" class="btn btn-primary btn-sm"><i class="bi bi-plus-lg me-1"></i>新增出库</a>
+    </div>
+
+    <form class="search-bar" method="get" asp-action="Index">
+        <div class="form-group">
+            <label>关键字</label>
+            <input type="text" name="Keyword" class="form-control" placeholder="出库单号/订单号" value="@query?.Keyword" />
+        </div>
+        <div class="form-group">
+            <label>开始日期</label>
+            <input type="date" name="StartDate" class="form-control" value="@query?.StartDate?.ToString("yyyy-MM-dd")" />
+        </div>
+        <div class="form-group">
+            <label>结束日期</label>
+            <input type="date" name="EndDate" class="form-control" value="@query?.EndDate?.ToString("yyyy-MM-dd")" />
+        </div>
+        <button type="submit" class="btn btn-outline-secondary"><i class="bi bi-search me-1"></i>搜索</button>
+        <a asp-action="Index" class="btn btn-outline-secondary">重置</a>
+    </form>
+
+    <div class="table-responsive mt-3">
+        <table class="table data-table">
+            <thead><tr>
+                <th>出库单号</th><th>销售订单号</th><th>客户</th><th>出库日期</th><th>金额</th><th>经办人</th><th>时间</th><th style="width:100px">操作</th>
+            </tr></thead>
+            <tbody>
+                @if (!Model.Items.Any())
+                {
+                    <tr><td colspan="8" class="text-center text-muted py-4">暂无数据</td></tr>
+                }
+                @foreach (var item in Model.Items)
+                {
+                    <tr>
+                        <td><a asp-action="Details" asp-route-id="@item.Id" class="fw-bold">@item.OutNo</a></td>
+                        <td>@item.SaleOrderNo</td>
+                        <td>@item.CustomerName</td>
+                        <td>@item.OutTime.ToString("yyyy-MM-dd")</td>
+                        <td class="text-end">@item.TotalAmount.ToString("N2")</td>
+                        <td>@item.Operator</td>
+                        <td>@item.CreateTime.ToString("yyyy-MM-dd HH:mm")</td>
+                        <td>
+                            <a asp-action="Details" asp-route-id="@item.Id" class="btn btn-sm btn-outline-info" title="详情"><i class="bi bi-eye"></i></a>
+                            <a asp-action="Print" asp-route-id="@item.Id" class="btn btn-sm btn-outline-secondary" title="打印"><i class="bi bi-printer"></i></a>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+
+    @{
+        ViewData["Page"] = Model.Page;
+        ViewData["PageSize"] = Model.PageSize;
+        ViewData["TotalCount"] = Model.TotalCount;
+        @await Html.PartialAsync("_Pager")
+    }
+</div>

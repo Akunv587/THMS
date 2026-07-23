@@ -1,0 +1,153 @@
+@using EquipmentIMS.Models.Enums
+@model PagedResult<EquipmentIMS.Models.DTOs.SaleReturnListDto>
+@{
+    ViewData["Title"] = "销售退货管理";
+    var query = ViewData["Query"] as EquipmentIMS.Web.Models.SaleReturnQueryViewModel;
+    var isManager = (bool)(ViewData["IsManager"] ?? false);
+}
+
+<div class="content-card">
+    <div class="content-header">
+        <h4><i class="bi bi-arrow-return-left me-2"></i>销售退货管理</h4>
+        <a asp-action="Create" class="btn btn-primary btn-sm"><i class="bi bi-plus-lg me-1"></i>新增退货</a>
+    </div>
+
+    <form class="search-bar" method="get" asp-action="Index">
+        <div class="form-group">
+            <label>关键字</label>
+            <input type="text" name="Keyword" class="form-control" placeholder="退货单号/出库单号" value="@query?.Keyword" />
+        </div>
+        <div class="form-group">
+            <label>状态</label>
+            <select name="Status" class="form-select">
+                <option value="">全部</option>
+                <option value="0" selected="@(query?.Status == 0)">待审批</option>
+                <option value="2" selected="@(query?.Status == 2)">已入库</option>
+                <option value="3" selected="@(query?.Status == 3)">已驳回</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label>开始日期</label>
+            <input type="date" name="StartDate" class="form-control" value="@query?.StartDate?.ToString("yyyy-MM-dd")" />
+        </div>
+        <div class="form-group">
+            <label>结束日期</label>
+            <input type="date" name="EndDate" class="form-control" value="@query?.EndDate?.ToString("yyyy-MM-dd")" />
+        </div>
+        <button type="submit" class="btn btn-outline-secondary"><i class="bi bi-search me-1"></i>搜索</button>
+        <a asp-action="Index" class="btn btn-outline-secondary">重置</a>
+    </form>
+
+    @if (TempData["Success"] != null)
+    {
+        <div class="alert alert-success mt-3 mb-0">@TempData["Success"]</div>
+    }
+
+    <div class="table-responsive mt-3">
+        <table class="table data-table">
+            <thead><tr>
+                <th>退货单号</th><th>出库单号</th><th>客户</th><th>退货日期</th><th>金额</th><th>状态</th><th>审批人</th><th>创建人</th><th>时间</th><th style="width:140px">操作</th>
+            </tr></thead>
+            <tbody>
+                @if (!Model.Items.Any())
+                {
+                    <tr><td colspan="10" class="text-center text-muted py-4">暂无数据</td></tr>
+                }
+                @foreach (var item in Model.Items)
+                {
+                    var status = (SaleReturnStatus)item.Status;
+                    var statusClass = status switch
+                    {
+                        SaleReturnStatus.PendingApproval => "bg-warning text-dark",
+                        SaleReturnStatus.Received => "bg-success",
+                        SaleReturnStatus.Rejected => "bg-danger",
+                        _ => "bg-secondary"
+                    };
+                    <tr>
+                        <td><span class="fw-bold">@item.ReturnNo</span></td>
+                        <td>@item.SaleOutNo</td>
+                        <td>@item.CustomerName</td>
+                        <td>@item.ReturnDate.ToString("yyyy-MM-dd")</td>
+                        <td class="text-end">@item.TotalAmount.ToString("N2")</td>
+                        <td><span class="badge @statusClass">@item.StatusName</span></td>
+                        <td>@item.Approver</td>
+                        <td>@item.CreateBy</td>
+                        <td>@item.CreateTime.ToString("yyyy-MM-dd HH:mm")</td>
+                        <td>
+                            @if (isManager && status == SaleReturnStatus.PendingApproval)
+                            {
+                                <button class="btn btn-sm btn-success btn-approve" data-id="@item.Id" title="审批通过"><i class="bi bi-check-lg"></i></button>
+                                <button class="btn btn-sm btn-danger btn-reject" data-id="@item.Id" data-no="@item.ReturnNo" title="驳回"><i class="bi bi-x-lg"></i></button>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+
+    @{
+        ViewData["Page"] = Model.Page;
+        ViewData["PageSize"] = Model.PageSize;
+        ViewData["TotalCount"] = Model.TotalCount;
+        @await Html.PartialAsync("_Pager")
+    }
+</div>
+
+@if (isManager)
+{
+    @* 驳回对话框 *@
+    <div class="modal fade" id="rejectModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">驳回退货单</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" id="rejectId" />
+                    <p>退货单号：<strong id="rejectNo"></strong></p>
+                    <label class="form-label">驳回原因 <span class="text-danger">*</span></label>
+                    <textarea id="rejectReason" class="form-control" rows="3" required></textarea>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="button" class="btn btn-danger" id="btnRejectConfirm">确认驳回</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@section Scripts {
+    <script>
+        $(function () {
+            $('.btn-approve').click(function () {
+                var id = $(this).data('id');
+                if (!confirm('确认审批通过该退货单？审批后库存将自动增加。')) return;
+                $.post('@Url.Action("Approve")', { id: id, __RequestVerificationToken: $('input[name="__RequestVerificationToken"]').val() }, function (res) {
+                    if (res.success) { showSuccess(res.message); setTimeout(function () { location.reload(); }, 800); }
+                    else showError(res.message);
+                }).fail(function () { showError('操作失败'); });
+            });
+
+            $('.btn-reject').click(function () {
+                $('#rejectId').val($(this).data('id'));
+                $('#rejectNo').text($(this).data('no'));
+                $('#rejectReason').val('');
+                var modal = new bootstrap.Modal(document.getElementById('rejectModal'));
+                modal.show();
+            });
+
+            $('#btnRejectConfirm').click(function () {
+                var id = $('#rejectId').val();
+                var reason = $('#rejectReason').val().trim();
+                if (!reason) { showError('请输入驳回原因'); return; }
+                $.post('@Url.Action("Reject")', { id: id, reason: reason, __RequestVerificationToken: $('input[name="__RequestVerificationToken"]').val() }, function (res) {
+                    if (res.success) { showSuccess(res.message); setTimeout(function () { location.reload(); }, 800); }
+                    else showError(res.message);
+                }).fail(function () { showError('操作失败'); });
+            });
+        });
+    </script>
+}

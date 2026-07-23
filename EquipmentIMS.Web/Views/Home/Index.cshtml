@@ -1,0 +1,298 @@
+﻿@{
+    ViewData["Title"] = "首页";
+}
+
+<!-- 指标卡片 -->
+<div class="row g-3 mb-4">
+    <div class="col-lg-4 col-md-6">
+        <div class="stat-card d-flex align-items-center gap-3">
+            <div class="stat-icon bg-primary bg-opacity-10 text-primary">
+                <i class="bi bi-box-seam"></i>
+            </div>
+            <div class="flex-grow-1">
+                <div class="stat-value" id="valStock">--</div>
+                <div class="stat-label">库存总值</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-4 col-md-6">
+        <div class="stat-card d-flex align-items-center gap-3">
+            <div class="stat-icon bg-success bg-opacity-10 text-success">
+                <i class="bi bi-graph-up"></i>
+            </div>
+            <div class="flex-grow-1">
+                <div class="stat-value" id="valSales">--</div>
+                <div class="stat-label">本月销售额</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-4 col-md-6">
+        <div class="stat-card d-flex align-items-center gap-3">
+            <div class="stat-icon bg-warning bg-opacity-10 text-warning">
+                <i class="bi bi-cart-check"></i>
+            </div>
+            <div class="flex-grow-1">
+                <div class="stat-value" id="valPurchase">--</div>
+                <div class="stat-label">本月采购额</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-4 col-md-6">
+        <div class="stat-card d-flex align-items-center gap-3">
+            <div class="stat-icon bg-info bg-opacity-10 text-info">
+                <i class="bi bi-tools"></i>
+            </div>
+            <div class="flex-grow-1">
+                <div class="stat-value" id="valWorkOrder">--</div>
+                <div class="stat-label">待处理工单</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-4 col-md-6">
+        <a href="/Stock/Warning" class="text-decoration-none">
+            <div class="stat-card d-flex align-items-center gap-3 stat-card-clickable">
+                <div class="stat-icon bg-danger bg-opacity-10 text-danger">
+                    <i class="bi bi-exclamation-triangle"></i>
+                </div>
+                <div class="flex-grow-1">
+                    <div class="stat-value text-danger" id="valLowStock">--</div>
+                    <div class="stat-label">低库存预警</div>
+                </div>
+            </div>
+        </a>
+    </div>
+    <div class="col-lg-4 col-md-6">
+        <a href="javascript:;" class="text-decoration-none" id="linkPendingApproval">
+            <div class="stat-card d-flex align-items-center gap-3 stat-card-clickable">
+                <div class="stat-icon bg-secondary bg-opacity-10 text-secondary">
+                    <i class="bi bi-hourglass-split"></i>
+                </div>
+                <div class="flex-grow-1">
+                    <div class="stat-value text-secondary" id="valPending">--</div>
+                    <div class="stat-label">待审批单据</div>
+                </div>
+            </div>
+        </a>
+    </div>
+</div>
+
+<!-- 图表区 -->
+<div class="row g-3 mb-4">
+    <div class="col-lg-6">
+        <div class="content-card">
+            <div class="card-header">
+                <i class="bi bi-graph-up me-2"></i>近6个月销售趋势
+            </div>
+            <div class="card-body">
+                <div id="chartSaleTrend" style="height:320px;"></div>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-6">
+        <div class="content-card">
+            <div class="card-header">
+                <i class="bi bi-pie-chart me-2"></i>库存分类分布
+            </div>
+            <div class="card-body">
+                <div id="chartStockDist" style="height:320px;"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 待审批列表 -->
+<div class="content-card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-list-check me-2"></i>待审批单据</span>
+        <small class="text-muted">近10条记录</small>
+    </div>
+    <div class="card-body p-0">
+        <table class="data-table" id="tblPending">
+            <thead>
+                <tr>
+                    <th>单据号</th>
+                    <th>类型</th>
+                    <th>金额</th>
+                    <th>创建人</th>
+                    <th style="width:100px;">操作</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr class="empty-row">
+                    <td colspan="5">
+                        <i class="bi bi-inbox"></i>
+                        暂无待审批单据
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+$(function () {
+    // 加载仪表盘数据
+    ajaxGet('/Home/GetDashboardData', function (res) {
+        var d = res.data;
+        animateValue('valStock', d.stockTotalValue, '¥');
+        animateValue('valSales', d.monthlySalesAmount, '¥');
+        animateValue('valPurchase', d.monthlyPurchaseAmount, '¥');
+        animateValue('valWorkOrder', d.pendingWorkOrders, '', true);
+        animateValue('valLowStock', d.lowStockAlertCount, '', true);
+        animateValue('valPending', d.pendingApprovalCount, '', true);
+    });
+
+    // 销售趋势图
+    ajaxGet('/Home/GetSaleTrend', function (res) {
+        var dom = document.getElementById('chartSaleTrend');
+        if (!dom) return;
+        var chart = echarts.init(dom);
+        chart.setOption({
+            tooltip: {
+                trigger: 'axis',
+                axisPointer: { type: 'shadow' },
+                formatter: function (params) {
+                    return params[0].axisValue + '<br/>销售额：¥' + params[0].value.toLocaleString();
+                }
+            },
+            grid: { top: 20, right: 20, bottom: 30, left: 60 },
+            xAxis: {
+                type: 'category',
+                data: res.data.months,
+                axisLine: { lineStyle: { color: '#ddd' } },
+                axisLabel: { color: '#888' }
+            },
+            yAxis: {
+                type: 'value',
+                axisLabel: { color: '#888', formatter: '¥{value}' },
+                splitLine: { lineStyle: { color: '#f0f0f0' } }
+            },
+            series: [{
+                name: '销售额',
+                type: 'line',
+                data: res.data.amounts,
+                smooth: true,
+                symbol: 'circle',
+                symbolSize: 8,
+                lineStyle: { color: '#667eea', width: 3 },
+                itemStyle: { color: '#667eea' },
+                areaStyle: {
+                    color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                        { offset: 0, color: 'rgba(102,126,234,0.3)' },
+                        { offset: 1, color: 'rgba(102,126,234,0.02)' }
+                    ])
+                }
+            }]
+        });
+        window.addEventListener('resize', function () { chart.resize(); });
+    });
+
+    // 库存分布饼图
+    ajaxGet('/Home/GetStockDist', function (res) {
+        var dom = document.getElementById('chartStockDist');
+        if (!dom) return;
+        var chart = echarts.init(dom);
+        var colors = ['#667eea','#764ba2','#f093fb','#4facfe','#43e97b','#fa709a','#feca57','#ff6b6b'];
+        var seriesData = res.data.categories.map(function (name, i) {
+            return { value: res.data.values[i], name: name, itemStyle: { color: colors[i % colors.length] } };
+        });
+        chart.setOption({
+            tooltip: {
+                trigger: 'item',
+                formatter: '{b}: ¥{c} ({d}%)'
+            },
+            legend: {
+                orient: 'vertical',
+                right: 10,
+                top: 'center',
+                textStyle: { fontSize: 12, color: '#666' }
+            },
+            series: [{
+                name: '库存分布',
+                type: 'pie',
+                radius: ['45%', '75%'],
+                center: ['40%', '50%'],
+                label: {
+                    formatter: '{b}\n{d}%',
+                    fontSize: 11
+                },
+                emphasis: {
+                    label: { fontSize: 14, fontWeight: 'bold' }
+                },
+                data: seriesData
+            }]
+        });
+        window.addEventListener('resize', function () { chart.resize(); });
+    });
+
+    // 待审批列表
+    ajaxGet('/Home/GetPendingApprovals', function (res) {
+        var items = res.data;
+        var tbody = $('#tblPending tbody');
+        if (!items || items.length === 0) {
+            tbody.html('<tr class="empty-row"><td colspan="5"><i class="bi bi-inbox"></i>暂无待审批单据</td></tr>');
+            return;
+        }
+        var html = '';
+        $.each(items, function (i, item) {
+            html += '<tr>';
+            html += '<td>' + (item.orderNo || '') + '</td>';
+            html += '<td><span class="badge bg-light text-dark">' + (item.typeName || '') + '</span></td>';
+            html += '<td>¥' + (item.amount || 0).toLocaleString() + '</td>';
+            html += '<td>' + (item.creator || '') + '</td>';
+            html += '<td><button class="btn btn-sm btn-outline-primary btn-approve" data-id="' + item.orderId + '" data-type="' + item.orderType + '">审批</button></td>';
+            html += '</tr>';
+        });
+        tbody.html(html);
+    });
+});
+
+// 数字增长动画
+function animateValue(elId, target, prefix, isInt) {
+    var el = document.getElementById(elId);
+    if (!el || target == null) return;
+    prefix = prefix || '';
+    isInt = isInt || false;
+
+    var start = 0;
+    var duration = 800;
+    var startTime = null;
+
+    function easeOutExpo(t) {
+        return t === 1 ? 1 : 1 - Math.pow(2, -10 * t);
+    }
+
+    function step(timestamp) {
+        if (!startTime) startTime = timestamp;
+        var progress = Math.min((timestamp - startTime) / duration, 1);
+        var eased = easeOutExpo(progress);
+        var current = start + (target - start) * eased;
+        el.textContent = prefix + (isInt ? Math.floor(current).toLocaleString() : current.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+        if (progress < 1) {
+            requestAnimationFrame(step);
+        } else {
+            el.textContent = prefix + (isInt ? Math.floor(target).toLocaleString() : target.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+        }
+    }
+
+    requestAnimationFrame(step);
+}
+
+// 审批按钮事件 — 跳转到单据详情页进行审批
+$(document).on('click', '.btn-approve', function () {
+    var type = $(this).data('type');
+    var id = $(this).data('id');
+    var urlMap = {
+        purchase: '/PurchaseOrder/Details/' + id,
+        sale: '/SaleOrder/Details/' + id,
+        transfer: '/StockTransfer/Details/' + id,
+        check: '/StockCheck/Details/' + id
+    };
+    var url = urlMap[type];
+    if (url) {
+        window.location.href = url;
+    }
+});
+</script>
+}

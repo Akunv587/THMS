@@ -1,0 +1,225 @@
+@model EquipmentIMS.Web.Models.SaleReturnViewModel
+@{
+    ViewData["Title"] = "新增销售退货";
+}
+
+<div class="content-card">
+    <div class="content-header">
+        <h4>@ViewData["Title"]</h4>
+        <a asp-action="Index" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i>返回</a>
+    </div>
+
+    <form asp-action="Create" method="post" id="returnForm">
+        @Html.AntiForgeryToken()
+
+        @* 出库单选择区 *@
+        <div class="row g-3 mb-4">
+            <div class="col-md-6">
+                <label class="form-label">出库单 <span class="text-danger">*</span></label>
+                <select asp-for="SaleOutId" class="form-select" id="SaleOutId" style="width:100%">
+                    <option value="">请选择已出库的出库单</option>
+                </select>
+                <span asp-validation-for="SaleOutId" class="text-danger small"></span>
+            </div>
+            <div class="col-md-3">
+                <label asp-for="ReturnDate" class="form-label"></label>
+                <input asp-for="ReturnDate" type="date" class="form-control" />
+            </div>
+            <div class="col-md-3">
+                <label asp-for="Operator" class="form-label"></label>
+                <input asp-for="Operator" class="form-control" />
+            </div>
+        </div>
+
+        @* 出库单信息区 *@
+        <div class="alert alert-light border d-none" id="outInfo">
+            <div class="row">
+                <div class="col-md-4"><strong>出库单号：</strong><span id="infoOutNo">-</span></div>
+                <div class="col-md-4"><strong>客户：</strong><span id="infoCustomer">-</span></div>
+                <div class="col-md-4"><strong>金额：</strong><span id="infoAmount" class="text-primary">-</span></div>
+            </div>
+        </div>
+
+        @* 退货明细表格 *@
+        <h6 class="mb-2">退货明细</h6>
+        <div class="table-responsive">
+            <table class="table data-table" id="detailTable">
+                <thead><tr>
+                    <th>设备编码</th><th>设备名称</th><th>仓库</th><th>出库数量</th><th style="width:110px">退货数量</th><th>单价</th><th>金额</th>
+                </tr></thead>
+                <tbody id="detailBody">
+                    <tr id="emptyRow"><td colspan="7" class="text-center text-muted py-3">请先选择出库单</td></tr>
+                </tbody>
+                <tfoot>
+                    <tr>
+                        <td colspan="6" class="text-end fw-bold">合计：</td>
+                        <td class="fw-bold text-danger" id="totalAmount">0.00</td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+
+        @* 退货原因 *@
+        <div class="row g-3 mt-3">
+            <div class="col-12">
+                <label asp-for="Reason" class="form-label"><span class="text-danger">*</span>退货原因</label>
+                <textarea asp-for="Reason" class="form-control" rows="2" required></textarea>
+                <span asp-validation-for="Reason" class="text-danger small"></span>
+            </div>
+            <div class="col-12">
+                <label asp-for="Remark" class="form-label">备注</label>
+                <textarea asp-for="Remark" class="form-control" rows="1"></textarea>
+            </div>
+        </div>
+
+        <div class="mt-4">
+            <button type="submit" class="btn btn-primary" id="btnSubmit"><i class="bi bi-check-lg me-1"></i>提交退货</button>
+            <a asp-action="Index" class="btn btn-outline-secondary ms-2">取消</a>
+        </div>
+    </form>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    <script>
+        function loadOutDetails(outId) {
+            if (!outId) {
+                $('#detailBody').html('<tr id="emptyRow"><td colspan="7" class="text-center text-muted py-3">请先选择出库单</td></tr>');
+                $('#outInfo').addClass('d-none');
+                $('#totalAmount').text('0.00');
+                return;
+            }
+
+            $.getJSON('@Url.Action("GetOutDetails")', { saleOutId: outId }, function (res) {
+                if (!res.success) {
+                    showError(res.message);
+                    return;
+                }
+                renderDetails(res.data);
+            }).fail(function () {
+                showError('加载出库明细失败');
+            });
+        }
+
+        function renderDetails(details) {
+            var selectedOption = $('#SaleOutId').select2('data')[0];
+            if (selectedOption) {
+                $('#infoOutNo').text(selectedOption.text);
+                $('#infoCustomer').text(selectedOption.customerName || '-');
+                $('#infoAmount').text(parseFloat(selectedOption.totalAmount || 0).toFixed(2));
+                $('#outInfo').removeClass('d-none');
+            }
+
+            var html = '';
+            var index = 0;
+            if (details.length === 0) {
+                html = '<tr><td colspan="7" class="text-center text-muted py-3">该出库单无可退货明细</td></tr>';
+            } else {
+                $.each(details, function (i, d) {
+                    html += '<tr class="detail-row">'
+                        + '<td>' + (d.productCode || '') + '</td>'
+                        + '<td>' + d.productName + '</td>'
+                        + '<td>' + (d.warehouseName || '') + '</td>'
+                        + '<td class="text-end">' + d.outQty + '</td>'
+                        + '<td><input type="number" name="Details[' + index + '].ReturnQty" class="form-control form-control-sm return-qty" value="0" min="0" max="' + d.outQty + '" />'
+                        + '</td>'
+                        + '<td class="text-end">' + d.unitPrice.toFixed(2) + '</td>'
+                        + '<td class="text-end row-amount">0.00</td>'
+                        + '</tr>'
+                        + '<input type="hidden" name="Details[' + index + '].SaleOutDetailId" value="' + d.saleOutDetailId + '" />'
+                        + '<input type="hidden" name="Details[' + index + '].ProductId" value="' + d.productId + '" />'
+                        + '<input type="hidden" name="Details[' + index + '].WarehouseId" value="' + d.warehouseId + '" />'
+                        + '<input type="hidden" name="Details[' + index + '].UnitPrice" value="' + d.unitPrice + '" />'
+                        + '<input type="hidden" name="Details[' + index + '].OutQty" value="' + d.outQty + '" />'
+                        + '<input type="hidden" name="Details[' + index + '].ProductName" value="' + d.productName + '" />'
+                        + '<input type="hidden" name="Details[' + index + '].ProductCode" value="' + (d.productCode || '') + '" />'
+                        + '<input type="hidden" name="Details[' + index + '].WarehouseName" value="' + (d.warehouseName || '') + '" />';
+                    index++;
+                });
+                if (!html) html = '<tr><td colspan="7" class="text-center text-muted py-3">该出库单无可退货明细</td></tr>';
+            }
+            $('#detailBody').html(html);
+            calcTotal();
+        }
+
+        function calcRow() {
+            var $row = $(this).closest('.detail-row');
+            var qty = parseInt($(this).val()) || 0;
+            var price = parseFloat($row.find('input[name*="UnitPrice"]').val()) || 0;
+            var maxQty = parseInt($(this).attr('max')) || 0;
+
+            if (qty > maxQty) {
+                $(this).addClass('is-invalid');
+            } else {
+                $(this).removeClass('is-invalid');
+            }
+
+            $row.find('.row-amount').text((qty * price).toFixed(2));
+            calcTotal();
+        }
+
+        function calcTotal() {
+            var total = 0;
+            $('#detailBody .detail-row').each(function () {
+                var qty = parseInt($(this).find('.return-qty').val()) || 0;
+                var price = parseFloat($(this).find('input[name*="UnitPrice"]').val()) || 0;
+                total += qty * price;
+            });
+            $('#totalAmount').text(total.toFixed(2));
+        }
+
+        $(function () {
+            $('#SaleOutId').select2({
+                ajax: {
+                    url: '@Url.Action("GetShippedOuts")',
+                    dataType: 'json',
+                    delay: 300,
+                    data: function (params) { return { keyword: params.term }; },
+                    processResults: function (res) {
+                        return {
+                            results: (res.data || []).map(function (item) {
+                                return {
+                                    id: item.id,
+                                    text: item.outNo + ' - ' + item.customerName,
+                                    customerName: item.customerName,
+                                    totalAmount: item.totalAmount
+                                };
+                            })
+                        };
+                    }
+                },
+                placeholder: '搜索出库单号',
+                allowClear: true,
+                width: '100%'
+            }).on('select2:select', function (e) {
+                loadOutDetails(e.params.data.id);
+            }).on('select2:clear', function () {
+                $('#detailBody').html('<tr id="emptyRow"><td colspan="7" class="text-center text-muted py-3">请先选择出库单</td></tr>');
+                $('#outInfo').addClass('d-none');
+                $('#totalAmount').text('0.00');
+            });
+
+            $(document).on('input', '.return-qty', calcRow);
+
+            $('#returnForm').submit(function () {
+                var hasQty = false;
+                $('.return-qty').each(function () {
+                    if (parseInt($(this).val()) > 0) hasQty = true;
+                });
+                if (!hasQty) {
+                    showError('至少输入一条退货数量');
+                    return false;
+                }
+                var hasError = false;
+                $('.return-qty').each(function () {
+                    if ($(this).hasClass('is-invalid')) hasError = true;
+                });
+                if (hasError) {
+                    showError('退货数量超过出库数量，请修正');
+                    return false;
+                }
+                return confirm('确认提交退货申请？提交后将进入审批流程。');
+            });
+        });
+    </script>
+}

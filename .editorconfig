@@ -1,0 +1,71 @@
+# EditorConfig for EquipmentIMS
+# https://editorconfig.org
+
+root = true
+
+# 所有文件
+[*]
+indent_style = space
+indent_size = 4
+end_of_line = crlf
+charset = utf-8
+trim_trailing_whitespace = true
+insert_final_newline = true
+
+# C# 源代码文件
+[*.cs]
+indent_style = space
+indent_size = 4
+charset = utf-8
+
+# 命名风格
+dotnet_naming_rule.public_members_must_be_pascalcase.severity = suggestion
+dotnet_naming_rule.public_members_must_be_pascalcase.symbols = public_symbols
+dotnet_naming_rule.public_members_must_be_pascalcase.style = pascalcase_style
+
+dotnet_naming_symbols.public_symbols.applicable_kinds = property, method, field, event, delegate, enum, class, struct, interface
+dotnet_naming_symbols.public_symbols.applicable_accessibilities = public
+
+dotnet_naming_style.pascalcase_style.capitalization = pascal_case
+
+# 私有字段使用 _camelCase
+dotnet_naming_rule.private_fields_camelcase.severity = suggestion
+dotnet_naming_rule.private_fields_camelcase.symbols = private_fields
+dotnet_naming_rule.private_fields_camelcase.style = camelcase_underscore_style
+
+dotnet_naming_symbols.private_fields.applicable_kinds = field
+dotnet_naming_symbols.private_fields.applicable_accessibilities = private
+
+dotnet_naming_style.camelcase_underscore_style.required_prefix = _
+dotnet_naming_style.camelcase_underscore_style.capitalization = camel_case
+
+# 接口以 I 开头
+dotnet_naming_rule.interface_iprefix.severity = suggestion
+dotnet_naming_rule.interface_iprefix.symbols = interface_symbols
+dotnet_naming_rule.interface_iprefix.style = iprefix_style
+
+dotnet_naming_symbols.interface_symbols.applicable_kinds = interface
+
+dotnet_naming_style.iprefix_style.required_prefix = I
+dotnet_naming_style.iprefix_style.capitalization = pascal_case
+
+# C# 代码风格
+[*.cs]
+csharp_style_var_when_type_is_apparent = true:warning
+csharp_style_var_elsewhere = false:warning
+csharp_style_expression_bodied_methods = when_on_single_line:suggestion
+csharp_style_expression_bodied_properties = when_on_single_line:suggestion
+csharp_prefer_simple_using_statement = true:suggestion
+
+# XML 文档和资源文件
+[*.xml]
+indent_style = space
+indent_size = 2
+
+[*.{json,config,csproj,props,targets}]
+indent_style = space
+indent_size = 2
+
+# Markdown 文件
+[*.md]
+trim_trailing_whitespace = false

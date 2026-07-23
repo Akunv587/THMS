@@ -1,0 +1,200 @@
+@model List<EquipmentIMS.Models.DTOs.StockTransactionDto>
+@{
+    ViewData["Title"] = "库存流水查询";
+    var warehouses = ViewData["Warehouses"] as List<EquipmentIMS.BLL.Interfaces.WarehouseSimpleDto> ?? new();
+    var routeValues = ViewData["RouteValues"] as Dictionary<string, object?> ?? new();
+}
+
+<div class="content-card">
+    <div class="content-header">
+        <h4><i class="bi bi-arrow-left-right me-2"></i>@ViewData["Title"]</h4>
+        <div class="d-flex gap-2">
+            <a href="javascript:;" id="btnSyncExport" class="btn btn-success btn-sm"><i class="bi bi-download me-1"></i>同步导出</a>
+            <a href="javascript:;" id="btnAsyncExport" class="btn btn-primary btn-sm"><i class="bi bi-cloud-download me-1"></i>异步导出</a>
+        </div>
+    </div>
+
+    <form method="get" class="search-bar mb-3" id="searchForm">
+        <div class="row g-2">
+            <div class="col-md-3">
+                <label class="form-label small mb-1">时间范围</label>
+                <div class="d-flex gap-2">
+                    <input type="datetime-local" class="form-control form-control-sm" name="startTime" value="@Context.Request.Query["startTime"]" />
+                    <span class="align-self-center">~</span>
+                    <input type="datetime-local" class="form-control form-control-sm" name="endTime" value="@Context.Request.Query["endTime"]" />
+                </div>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small mb-1">设备搜索</label>
+                <input type="text" class="form-control form-control-sm" name="keyword" value="@Context.Request.Query["keyword"]" placeholder="编码/名称" />
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small mb-1">仓库</label>
+                <select class="form-select form-select-sm" name="warehouseId">
+                    <option value="">全部仓库</option>
+                    @foreach (var w in warehouses)
+                    {
+                        <!option value="@w.Id" selected="@(Context.Request.Query["warehouseId"] == w.Id.ToString())">@w.Name</!option>
+                    }
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small mb-1">流水类型</label>
+                <select class="form-select form-select-sm" name="transactionType">
+                    <option value="">全部类型</option>
+                    @foreach (var kv in GetTypeOptions())
+                    {
+                        <!option value="@kv.Key" selected="@(Context.Request.Query["transactionType"] == kv.Key)">@kv.Value</!option>
+                    }
+                </select>
+            </div>
+            <div class="col-md-2 d-flex align-items-end gap-2">
+                <button type="submit" class="btn btn-outline-secondary btn-sm"><i class="bi bi-search me-1"></i>查询</button>
+                <a asp-action="Index" class="btn btn-outline-danger btn-sm"><i class="bi bi-arrow-clockwise me-1"></i>重置</a>
+            </div>
+        </div>
+    </form>
+
+    <div class="table-responsive">
+        <table class="table table-hover align-middle table-sm">
+            <thead class="table-light">
+                <tr>
+                    <th>流水号</th>
+                    <th>时间</th>
+                    <th>类型</th>
+                    <th>设备编码</th>
+                    <th>设备名称</th>
+                    <th>仓库</th>
+                    <th class="text-end">数量</th>
+                    <th class="text-end">变动后库存</th>
+                    <th>关联单据</th>
+                    <th>操作人</th>
+                </tr>
+            </thead>
+            <tbody>
+                @if (!Model.Any())
+                {
+                    <tr><td colspan="10" class="text-center text-muted py-4">暂无流水记录</td></tr>
+                }
+                else
+                {
+                    @foreach (var t in Model)
+                    {
+                        <tr>
+                            <td><code>@t.TransactionNo</code></td>
+                            <td class="text-nowrap">@t.CreateTime.ToString("yyyy-MM-dd HH:mm")</td>
+                            <td>@RenderTypeBadge(t.TransactionType)</td>
+                            <td><code>@t.ProductCode</code></td>
+                            <td>@t.ProductName</td>
+                            <td>@t.WarehouseName</td>
+                            <td class="text-end">
+                                <span class="fw-bold @(t.Qty >= 0 ? "text-success" : "text-danger")">
+                                    @(t.Qty >= 0 ? "+" : "")@t.Qty
+                                </span>
+                            </td>
+                            <td class="text-end">@t.BalanceQty</td>
+                            <td>@(t.RefNo ?? "-")</td>
+                            <td>@t.Operator</td>
+                        </tr>
+                    }
+                }
+            </tbody>
+        </table>
+    </div>
+
+    <partial name="_Pager" />
+</div>
+
+@section Scripts {
+<script>
+    document.getElementById('btnSyncExport').addEventListener('click', function () {
+        var form = document.getElementById('searchForm');
+        var params = new URLSearchParams(new FormData(form));
+        params.delete('page');
+        params.delete('pageSize');
+        window.location.href = '@Url.Action("Export")?' + params.toString();
+    });
+
+    document.getElementById('btnAsyncExport').addEventListener('click', async function () {
+        var btn = this;
+        btn.disabled = true;
+        btn.innerHTML = '<i class="bi bi-hourglass-split me-1"></i>提交中...';
+
+        var form = document.getElementById('searchForm');
+        var params = new URLSearchParams(new FormData(form));
+
+        try {
+            var resp = await fetch('@Url.Action("AsyncExport")', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: params.toString()
+            });
+            var result = await resp.json();
+            if (result.success) {
+                alert('异步导出任务已提交（任务ID: ' + result.taskId + '），完成后将通过站内信通知下载。');
+                // 轮询检查导出完成
+                pollExportStatus(result.taskId);
+            } else {
+                alert('提交失败: ' + result.message);
+                btn.disabled = false;
+                btn.innerHTML = '<i class="bi bi-cloud-download me-1"></i>异步导出';
+            }
+        } catch (e) {
+            alert('请求失败: ' + e.message);
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-cloud-download me-1"></i>异步导出';
+        }
+    });
+
+    function pollExportStatus(taskId) {
+        var count = 0;
+        var timer = setInterval(async function () {
+            count++;
+            try {
+                var resp = await fetch('@Url.Action("CheckExport", "StockTransaction")/' + taskId);
+                var result = await resp.json();
+                if (result.success) {
+                    clearInterval(timer);
+                    window.open(result.downloadUrl, '_blank');
+                }
+            } catch (e) { }
+            if (count > 120) { clearInterval(timer); } // 超时2分钟
+        }, 2000);
+    }
+</script>
+}
+
+@functions {
+    private Dictionary<string, string> GetTypeOptions() => new()
+    {
+        ["1"] = "采购入库",
+        ["2"] = "采购退货出库",
+        ["3"] = "销售出库",
+        ["4"] = "销售退货入库",
+        ["5"] = "调拨入库",
+        ["6"] = "调拨出库",
+        ["7"] = "盘盈入库",
+        ["8"] = "盘亏出库",
+        ["9"] = "初始导入",
+        ["10"] = "维修领用"
+    };
+
+    private Microsoft.AspNetCore.Html.IHtmlContent RenderTypeBadge(int type)
+    {
+        var (label, cls) = type switch
+        {
+            1 => ("采购入库", "bg-success"),
+            2 => ("采购退货出库", "bg-danger"),
+            3 => ("销售出库", "bg-danger"),
+            4 => ("销售退货入库", "bg-success"),
+            5 => ("调拨入库", "bg-primary"),
+            6 => ("调拨出库", "bg-warning text-dark"),
+            7 => ("盘盈入库", "bg-success"),
+            8 => ("盘亏出库", "bg-danger"),
+            9 => ("初始导入", "bg-secondary"),
+            10 => ("维修领用", "bg-purple"),
+            _ => ("未知", "bg-secondary")
+        };
+        return new Microsoft.AspNetCore.Html.HtmlString($"<span class=\"badge {cls} text-nowrap\">{label}</span>");
+    }
+}

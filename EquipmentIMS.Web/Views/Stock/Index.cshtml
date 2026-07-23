@@ -1,0 +1,115 @@
+@model List<EquipmentIMS.Models.DTOs.StockListDto>
+@{
+    ViewData["Title"] = "库存查询";
+    var categories = ViewData["Categories"] as List<EquipmentIMS.BLL.Interfaces.CategorySimpleDto> ?? new();
+    var warehouses = ViewData["Warehouses"] as List<EquipmentIMS.BLL.Interfaces.WarehouseSimpleDto> ?? new();
+    var routeValues = ViewData["RouteValues"] as Dictionary<string, object?> ?? new();
+}
+
+<div class="content-card">
+    <div class="content-header">
+        <h4><i class="bi bi-box-seam me-2"></i>@ViewData["Title"]</h4>
+        <div class="d-flex gap-2">
+            <a asp-action="Warning" class="btn btn-warning btn-sm"><i class="bi bi-exclamation-triangle me-1"></i>低库存预警</a>
+            <a asp-action="InitialImport" class="btn btn-primary btn-sm"><i class="bi bi-upload me-1"></i>期初导入</a>
+        </div>
+    </div>
+
+    <form method="get" class="search-bar mb-3">
+        <div class="row g-2">
+            <div class="col-md-3">
+                <input type="text" class="form-control" name="keyword" value="@Context.Request.Query["keyword"]" placeholder="设备编码/名称" />
+            </div>
+            <div class="col-md-2">
+                <select class="form-select" name="categoryId">
+                    <option value="">全部分类</option>
+                    @foreach (var c in categories)
+                    {
+                        var selected = Context.Request.Query["categoryId"] == c.Id.ToString();
+                        <!option value="@c.Id" selected="@selected">@c.Name</!option>
+                    }
+                </select>
+            </div>
+            <div class="col-md-2">
+                <select class="form-select" name="warehouseId">
+                    <option value="">全部仓库</option>
+                    @foreach (var w in warehouses)
+                    {
+                        var selected = Context.Request.Query["warehouseId"] == w.Id.ToString();
+                        <!option value="@w.Id" selected="@selected">@w.Name</!option>
+                    }
+                </select>
+            </div>
+            <div class="col-md-2">
+                <select class="form-select" name="warningOnly">
+                    <option value="">全部状态</option>
+                    @{
+                        var warnVal = Context.Request.Query["warningOnly"];
+                        var warnSelected = warnVal.Count > 0 ? warnVal[0] : "";
+                    }
+                    <!option value="false" selected="@(warnSelected == "false")">正常</!option>
+                    <!option value="true" selected="@(warnSelected == "true")">低库存</!option>
+                </select>
+            </div>
+            <div class="col-md-3 d-flex gap-2">
+                <button type="submit" class="btn btn-outline-secondary"><i class="bi bi-search me-1"></i>搜索</button>
+                <a asp-action="Index" class="btn btn-outline-danger"><i class="bi bi-arrow-clockwise me-1"></i>重置</a>
+            </div>
+        </div>
+    </form>
+
+    <div class="table-responsive">
+        <table class="table table-hover align-middle">
+            <thead class="table-light">
+                <tr>
+                    <th>设备编码</th>
+                    <th>设备名称</th>
+                    <th>规格型号</th>
+                    <th>分类</th>
+                    <th>仓库</th>
+                    <th class="text-end">库存数量</th>
+                    <th class="text-end">锁定数量</th>
+                    <th class="text-end">可用数量</th>
+                    <th class="text-end">安全库存</th>
+                    <th>预警状态</th>
+                </tr>
+            </thead>
+            <tbody>
+                @if (!Model.Any())
+                {
+                    <tr><td colspan="10" class="text-center text-muted py-4">暂无库存数据</td></tr>
+                }
+                else
+                {
+                    @foreach (var s in Model)
+                    {
+                        var isWarning = s.WarningLevel == "低库存";
+                        <tr class="@(isWarning ? "table-warning" : "")">
+                            <td><code>@s.ProductCode</code></td>
+                            <td>@s.ProductName</td>
+                            <td>@(s.Spec ?? "-")</td>
+                            <td>@(s.CategoryName ?? "-")</td>
+                            <td>@s.WarehouseName</td>
+                            <td class="text-end fw-bold">@s.Quantity</td>
+                            <td class="text-end">@s.LockQty</td>
+                            <td class="text-end fw-bold">@s.AvailableQty</td>
+                            <td class="text-end text-muted">@s.MinStock</td>
+                            <td>
+                                @if (isWarning)
+                                {
+                                    <span class="badge bg-warning text-dark">低库存</span>
+                                }
+                                else
+                                {
+                                    <span class="badge bg-success">正常</span>
+                                }
+                            </td>
+                        </tr>
+                    }
+                }
+            </tbody>
+        </table>
+    </div>
+
+    <partial name="_Pager" />
+</div>

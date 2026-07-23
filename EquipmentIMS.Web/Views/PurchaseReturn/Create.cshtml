@@ -1,0 +1,244 @@
+@model EquipmentIMS.Web.Models.PurchaseReturnViewModel
+@{
+    ViewData["Title"] = "新增采购退货";
+}
+
+<div class="content-card">
+    <div class="content-header">
+        <h4>@ViewData["Title"]</h4>
+        <a asp-action="Index" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i>返回</a>
+    </div>
+
+    <form id="purchaseReturnForm">
+        <div class="row g-3">
+            <div class="col-md-4">
+                <label class="form-label">选择入库单 <span class="text-danger">*</span></label>
+                <select id="purchaseInSelect" class="form-select" style="width:100%">
+                    <option value="">请选择已入库的入库单</option>
+                </select>
+                <div id="inInfo" class="mt-2 small text-muted" style="display:none"></div>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">退货日期</label>
+                <input asp-for="ReturnDate" type="date" class="form-control" />
+            </div>
+            <div class="col-md-5">
+                <label class="form-label">退货原因</label>
+                <input asp-for="Reason" class="form-control" placeholder="请输入退货原因" />
+            </div>
+            <div class="col-md-12">
+                <label class="form-label">备注</label>
+                <input asp-for="Remark" class="form-control" />
+            </div>
+        </div>
+
+        <div class="mt-4">
+            <h6 class="mb-2">退货明细</h6>
+            <div class="table-responsive">
+                <table class="table data-table" id="detailTable">
+                    <thead><tr>
+                        <th>设备编码</th><th>设备名称</th><th>规格</th><th>入库数量</th><th>已退货</th><th>可退货</th><th style="width:120px">退货数量</th><th>单价</th><th>金额</th>
+                    </tr></thead>
+                    <tbody id="detailBody">
+                        <tr id="emptyRow"><td colspan="9" class="text-center text-muted py-4">请先选择入库单</td></tr>
+                    </tbody>
+                    <tfoot>
+                        <tr>
+                            <td colspan="7" class="text-end fw-bold">合计：</td>
+                            <td colspan="2" class="fw-bold text-danger" id="totalAmount">0.00</td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        </div>
+
+        <div class="mt-4">
+            <button type="button" id="btnSubmit" class="btn btn-danger" disabled>
+                <i class="bi bi-box-arrow-right me-1"></i>确认退货
+            </button>
+            <a asp-action="Index" class="btn btn-outline-secondary ms-2">取消</a>
+        </div>
+    </form>
+</div>
+
+<!-- 确认对话框 -->
+<div class="modal fade" id="confirmModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header"><h5 class="modal-title">确认退货</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+            <div class="modal-body" id="confirmBody"></div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-danger" id="btnConfirm"><i class="bi bi-check-lg me-1"></i>确认退货</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        var selectedIn = null;
+
+        $(function () {
+            $('#purchaseInSelect').select2({
+                ajax: {
+                    url: '@Url.Action("GetApprovedOrdersForIn", "PurchaseIn")',
+                    dataType: 'json',
+                    delay: 300,
+                    processResults: function (res) {
+                        return {
+                            results: (res.data || []).map(function (item) {
+                                return { id: item.id, text: item.orderNo + ' - ' + item.supplierName, item: item };
+                            })
+                        };
+                    }
+                },
+                placeholder: '搜索入库单号',
+                allowClear: true,
+                width: '100%'
+            }).on('select2:select', function (e) {
+                loadInDetails(e.params.data.item.id);
+            }).on('select2:clear', function () {
+                resetDetails();
+            });
+        });
+
+        function loadInDetails(inId) {
+            $.get('@Url.Action("GetById", "PurchaseIn")?id=' + inId, function (res) {
+                selectedIn = res;
+                var html = '';
+                if (res.details && res.details.length > 0) {
+                    res.details.forEach(function (d, i) {
+                        var remaining = d.qty - d.returnedQty;
+                        if (remaining <= 0) return;
+                        html += '<tr class="detail-row">'
+                            + '<td>' + d.productCode + '</td>'
+                            + '<td>' + d.productName + '</td>'
+                            + '<td>' + (d.spec || '') + '</td>'
+                            + '<td class="text-center">' + d.qty + '</td>'
+                            + '<td class="text-center">' + d.returnedQty + '</td>'
+                            + '<td class="text-center text-warning fw-bold">' + remaining + '</td>'
+                            + '<td><input type="number" class="form-control form-control-sm return-qty" value="' + remaining + '" min="1" max="' + remaining + '" data-idx="' + i + '" /></td>'
+                            + '<td class="text-end unit-price">' + d.unitPrice.toFixed(2) + '</td>'
+                            + '<td class="text-end amount">0.00</td>'
+                            + '</tr>';
+                    });
+                }
+                if (!html) html = '<tr><td colspan="9" class="text-center text-muted py-3">该入库单所有设备已全部退货</td></tr>';
+                $('#detailBody').html(html);
+                $('#inInfo').html('<strong>' + res.inNo + '</strong> | 供应商: ' + res.supplierName + ' | 仓库: ' + (res.warehouseName || '') + ' | 金额: ' + res.totalAmount.toFixed(2)).show();
+                $('#btnSubmit').prop('disabled', false);
+                calcTotal();
+            }).fail(function () { alert('加载入库单详情失败'); });
+        }
+
+        function resetDetails() {
+            selectedIn = null;
+            $('#detailBody').html('<tr id="emptyRow"><td colspan="9" class="text-center text-muted py-4">请先选择入库单</td></tr>');
+            $('#inInfo').hide();
+            $('#btnSubmit').prop('disabled', true);
+            $('#totalAmount').text('0.00');
+        }
+
+        function calcTotal() {
+            var total = 0;
+            $('#detailBody .detail-row').each(function () {
+                var qty = parseInt($(this).find('.return-qty').val()) || 0;
+                var price = parseFloat($(this).find('.unit-price').text()) || 0;
+                $(this).find('.amount').text((qty * price).toFixed(2));
+                total += qty * price;
+            });
+            $('#totalAmount').text(total.toFixed(2));
+        }
+
+        $(document).on('input', '.return-qty', function () {
+            var $row = $(this).closest('.detail-row');
+            var max = parseInt($(this).attr('max'));
+            var val = parseInt($(this).val()) || 0;
+            if (val < 0) { $(this).val(0); val = 0; }
+            if (val > max) { $(this).val(max); val = max; }
+            calcTotal();
+        });
+
+        $('#btnSubmit').click(function () {
+            if (!selectedIn) { alert('请先选择入库单'); return; }
+            var details = [];
+            var valid = true;
+            $('#detailBody .detail-row').each(function () {
+                var qty = parseInt($(this).find('.return-qty').val()) || 0;
+                if (qty <= 0) valid = false;
+                details.push({
+                    productId: selectedIn.details[$(this).find('.return-qty').data('idx')].productId,
+                    productCode: $(this).find('td:eq(0)').text(),
+                    productName: $(this).find('td:eq(1)').text(),
+                    spec: $(this).find('td:eq(2)').text(),
+                    unit: selectedIn.details[$(this).find('.return-qty').data('idx')].unit,
+                    inQty: parseInt($(this).find('td:eq(3)').text()),
+                    returnedQty: parseInt($(this).find('td:eq(4)').text()),
+                    remainingQty: parseInt($(this).find('td:eq(5)').text()),
+                    returnQty: qty,
+                    unitPrice: parseFloat($(this).find('.unit-price').text()) || 0,
+                    amount: qty * (parseFloat($(this).find('.unit-price').text()) || 0)
+                });
+            });
+            if (!valid) { alert('请填写所有明细的退货数量'); return; }
+
+            var amount = parseFloat($('#totalAmount').text()) || 0;
+            var reason = $('#Reason').val() || '无';
+            var html = '<p><strong>入库单号：</strong>' + selectedIn.inNo + '</p>'
+                + '<p><strong>退货原因：</strong>' + reason + '</p>'
+                + '<p><strong>退货明细：</strong></p>'
+                + '<table class="table table-sm"><thead><tr><th>设备</th><th>数量</th></tr></thead><tbody>';
+            details.forEach(function (d) {
+                html += '<tr><td>' + d.productName + '</td><td>' + d.returnQty + '</td></tr>';
+            });
+            html += '</tbody></table><p class="fw-bold text-danger">合计金额：' + amount.toFixed(2) + '</p>';
+            $('#confirmBody').html(html);
+            $('#confirmModal').modal('show');
+        });
+
+        $('#btnConfirm').click(function () {
+            $('#btnConfirm').prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-1"></span>退货中...');
+            var details = [];
+            $('#detailBody .detail-row').each(function () {
+                var idx = $(this).find('.return-qty').data('idx');
+                var d = selectedIn.details[idx];
+                var qty = parseInt($(this).find('.return-qty').val()) || 0;
+                if (qty <= 0) return;
+                details.push({
+                    ProductId: d.productId,
+                    ProductCode: d.productCode,
+                    ProductName: d.productName,
+                    Spec: d.spec,
+                    Unit: d.unit,
+                    InQty: d.qty,
+                    ReturnedQty: d.returnedQty,
+                    RemainingQty: d.qty - d.returnedQty,
+                    Qty: qty,
+                    UnitPrice: d.unitPrice,
+                    Amount: qty * d.unitPrice
+                });
+            });
+
+            var token = $('input[name="__RequestVerificationToken"]').val();
+            $.ajax({
+                url: '@Url.Action("Create")',
+                type: 'POST',
+                data: JSON.stringify({
+                    PurchaseInId: selectedIn.id,
+                    ReturnDate: $('#ReturnDate').val(),
+                    Reason: $('#Reason').val(),
+                    Remark: $('#Remark').val(),
+                    Details: details
+                }),
+                contentType: 'application/json; charset=utf-8',
+                headers: { 'RequestVerificationToken': token },
+                success: function (res) {
+                    if (res.success) { alert(res.message); location.href = '@Url.Action("Index")'; }
+                    else { alert(res.message); $('#btnConfirm').prop('disabled', false).html('<i class="bi bi-check-lg me-1"></i>确认退货'); }
+                },
+                error: function () { alert('操作失败'); $('#btnConfirm').prop('disabled', false).html('<i class="bi bi-check-lg me-1"></i>确认退货'); }
+            });
+        });
+    </script>
+}

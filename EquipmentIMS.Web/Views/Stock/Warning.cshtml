@@ -1,0 +1,441 @@
+@using EquipmentIMS.Models.DTOs
+@model List<StockAlertWarningDto>
+@{
+    ViewData["Title"] = "库存预警仪表盘";
+    var stats = ViewData["Stats"] as StockWarningStatDto ?? new StockWarningStatDto();
+    var outOfStockCount = stats.OutOfStockCount;
+    var lowStockCount = stats.LowStockCount;
+    var normalCount = stats.NormalCount;
+    var totalProducts = stats.TotalProductCount;
+    var categories = ViewData["Categories"] as List<CategorySimpleDto> ?? new();
+    var warehouses = ViewData["Warehouses"] as List<WarehouseSimpleDto> ?? new();
+}
+
+<div class="content-card">
+    <div class="content-header">
+        <h4><i class="bi bi-exclamation-triangle me-2"></i>@ViewData["Title"]</h4>
+        <div class="d-flex gap-2">
+            <a asp-action="Index" class="btn btn-outline-secondary btn-sm">
+                <i class="bi bi-arrow-left me-1"></i>返回库存列表
+            </a>
+            <button class="btn btn-success btn-sm" onclick="exportToExcel()">
+                <i class="bi bi-file-earmark-excel me-1"></i>导出 Excel
+            </button>
+        </div>
+    </div>
+
+    <div class="card-body">
+        @* 统计卡片 *@
+        <div class="row g-3 mb-4">
+            <div class="col-lg-4 col-md-6">
+                <div class="stat-card stat-card-clickable border-start border-4 border-danger" onclick="filterTable('缺货')">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="stat-icon" style="background:#fee2e2;color:#dc2626;">
+                            <i class="bi bi-x-octagon"></i>
+                        </div>
+                        <div>
+                            <div class="stat-value text-danger" id="count-outofstock">@outOfStockCount</div>
+                            <div class="stat-label">缺货设备</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-4 col-md-6">
+                <div class="stat-card stat-card-clickable border-start border-4 border-warning" onclick="filterTable('低库存')">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="stat-icon" style="background:#fef3c7;color:#d97706;">
+                            <i class="bi bi-exclamation-diamond"></i>
+                        </div>
+                        <div>
+                            <div class="stat-value" style="color:#d97706;" id="count-lowstock">@lowStockCount</div>
+                            <div class="stat-label">低库存设备</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-4 col-md-12">
+                <div class="stat-card border-start border-4 border-success">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="stat-icon" style="background:#dcfce7;color:#16a34a;">
+                            <i class="bi bi-check-circle"></i>
+                        </div>
+                        <div>
+                            <div class="stat-value text-success" id="count-normal">@normalCount</div>
+                            <div class="stat-label">
+                                正常设备
+                                <small class="text-muted ms-2">共 <span id="count-total">@totalProducts</span> 种</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        @* 图表区 *@
+        <div class="row g-3 mb-4">
+            <div class="col-lg-5">
+                <div class="content-card h-100">
+                    <div class="card-header py-2"><i class="bi bi-pie-chart me-1"></i>预警分布</div>
+                    <div class="card-body d-flex align-items-center justify-content-center">
+                        <div id="chart-pie" style="width:100%;height:280px;"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-7">
+                <div class="content-card h-100">
+                    <div class="card-header py-2"><i class="bi bi-bar-chart me-1"></i>按分类预警排名</div>
+                    <div class="card-body d-flex align-items-center justify-content-center">
+                        <div id="chart-bar" style="width:100%;height:280px;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        @* 筛选区 *@
+        <div class="content-card mb-4">
+            <div class="card-header py-2"><i class="bi bi-funnel me-1"></i>筛选预警清单</div>
+            <div class="card-body">
+                <div class="search-bar flex-wrap">
+                    <div class="form-group flex-grow-1" style="min-width:180px;">
+                        <label>关键字</label>
+                        <input type="text" id="filterKeyword" class="form-control" placeholder="设备编码/名称/仓库" oninput="applyFilters()" />
+                    </div>
+                    <div class="form-group" style="min-width:140px;">
+                        <label>仓库</label>
+                        <select id="filterWarehouse" class="form-select" onchange="applyFilters()">
+                            <option value="">全部仓库</option>
+                            @foreach (var wh in warehouses)
+                            {
+                                <option value="@wh.Id">@wh.Name</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="form-group" style="min-width:140px;">
+                        <label>设备分类</label>
+                        <select id="filterCategory" class="form-select" onchange="applyFilters()">
+                            <option value="">全部分类</option>
+                            @foreach (var cat in categories)
+                            {
+                                <option value="@cat.Name">@cat.Name</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="form-group" style="min-width:120px;">
+                        <label>预警级别</label>
+                        <select id="filterLevel" class="form-select" onchange="applyFilters()">
+                            <option value="">全部</option>
+                            <option value="缺货">缺货</option>
+                            <option value="低库存">低库存</option>
+                        </select>
+                    </div>
+                    <button class="btn btn-outline-secondary align-self-end" onclick="resetFilters()">
+                        <i class="bi bi-arrow-counterclockwise me-1"></i>重置
+                    </button>
+                </div>
+                <div class="mt-2 text-muted small">
+                    <i class="bi bi-info-circle me-1"></i>共 <strong id="filteredCount">@(outOfStockCount + lowStockCount)</strong> 条预警
+                </div>
+            </div>
+        </div>
+
+        @* 预警清单表格 *@
+        <div class="table-responsive">
+            <table class="table data-table" id="warningTable">
+                <thead>
+                    <tr>
+                        <th>设备编码</th>
+                        <th>设备名称</th>
+                        <th>规格型号</th>
+                        <th>仓库</th>
+                        <th class="text-end">当前库存</th>
+                        <th class="text-end">可用库存</th>
+                        <th class="text-end">安全库存</th>
+                        <th>预警级别</th>
+                        <th style="width:90px">操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (!Model.Any())
+                    {
+                        <tr class="empty-row">
+                            <td colspan="9">
+                                <i class="bi bi-check-circle"></i>暂无低库存预警，所有设备库存正常
+                            </td>
+                        </tr>
+                    }
+                    else
+                    {
+                        @foreach (var w in Model)
+                        {
+                            var isOutOfStock = w.AlertLevel == (int)EquipmentIMS.Models.Enums.AlertLevel.OutOfStock;
+                            <tr class="@(isOutOfStock ? "table-danger" : "table-warning")"
+                                data-level="@(isOutOfStock ? "缺货" : "低库存")"
+                                data-category="@(ViewData[$"cat_{w.ProductId}"] ?? "")"
+                                data-warehouse="@w.WarehouseName"
+                                onclick="navigateToProduct(@w.ProductId)"
+                                style="cursor:pointer;">
+                                <td><code>@w.ProductCode</code></td>
+                                <td>
+                                    <a asp-controller="Product" asp-action="Details" asp-route-id="@w.ProductId"
+                                       class="fw-semibold text-decoration-none"
+                                       onclick="event.stopPropagation();">
+                                        @w.ProductName
+                                    </a>
+                                </td>
+                                <td><small class="text-muted">@(w.Spec ?? "-")</small></td>
+                                <td>@w.WarehouseName</td>
+                                <td class="text-end">
+                                    <span class="@(isOutOfStock ? "fw-bold text-danger" : "")">@w.CurrentQty</span>
+                                </td>
+                                <td class="text-end">@w.AvailableQty</td>
+                                <td class="text-end text-muted">@w.MinStock</td>
+                                <td>
+                                    <span class="status-badge @(isOutOfStock ? "status-cancelled" : "status-pending")">
+                                        <i class="bi @(isOutOfStock ? "bi-x-circle" : "bi-exclamation-triangle") me-1"></i>
+                                        @w.AlertLevelName
+                                    </span>
+                                </td>
+                                <td>
+                                    <div class="d-flex gap-1" onclick="event.stopPropagation();">
+                                        <a asp-controller="Product" asp-action="Details" asp-route-id="@w.ProductId"
+                                           class="btn btn-sm btn-outline-info" title="查看设备">
+                                            <i class="bi bi-eye"></i>
+                                        </a>
+                                        @if (isOutOfStock)
+                                        {
+                                            <a asp-controller="PurchaseOrder" asp-action="Create"
+                                               class="btn btn-sm btn-outline-warning" title="创建采购单">
+                                                <i class="bi bi-cart-plus"></i>
+                                            </a>
+                                        }
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        @* 空筛选结果 *@
+        <div id="filterEmpty" class="empty-state" style="display:none;">
+            <i class="bi bi-search"></i>
+            <div class="empty-text">未找到匹配的预警记录</div>
+            <div class="empty-desc">请尝试调整筛选条件</div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+    $(function () {
+        // 加载图表数据
+        $.getJSON('/Stock/WarningChartData', function (res) {
+            initPieChart(res.pie);
+            initBarChart(res.bar);
+        }).fail(function () {
+            // 降级：使用服务端数据
+            initPieChart([
+                { name: '缺货', value: @outOfStockCount, color: '#dc2626' },
+                { name: '低库存', value: @lowStockCount, color: '#f59e0b' },
+                { name: '正常', value: @normalCount, color: '#16a34a' }
+            ]);
+            $('#chart-bar').parent().html('<div class="text-muted text-center py-4"><i class="bi bi-info-circle me-1"></i>分类排名数据暂不可用</div>');
+        });
+
+        // CountUp 数字动画
+        animateCount('count-outofstock', @outOfStockCount);
+        animateCount('count-lowstock', @lowStockCount);
+        animateCount('count-normal', @normalCount);
+    });
+
+    function initPieChart(pieData) {
+        var dom = document.getElementById('chart-pie');
+        if (!dom) return;
+        var chart = echarts.init(dom);
+        chart.setOption({
+            tooltip: {
+                trigger: 'item',
+                formatter: '<b>{b}</b>: {c} 种 ({d}%)'
+            },
+            legend: {
+                bottom: 0,
+                itemWidth: 10,
+                itemHeight: 10,
+                textStyle: { fontSize: 12 }
+            },
+            series: [{
+                type: 'pie',
+                radius: ['55%', '78%'],
+                center: ['50%', '45%'],
+                avoidLabelOverlap: false,
+                itemStyle: {
+                    borderRadius: 6,
+                    borderColor: '#fff',
+                    borderWidth: 3
+                },
+                label: {
+                    show: true,
+                    position: 'center',
+                    formatter: function () {
+                        var total = pieData.reduce(function (s, d) { return s + d.value; }, 0);
+                        return '{total|' + total + '}\n{label|设备总计}';
+                    },
+                    rich: {
+                        total: { fontSize: 28, fontWeight: 'bold', color: '#1e293b', lineHeight: 36 },
+                        label: { fontSize: 12, color: '#94a3b8', lineHeight: 20 }
+                    }
+                },
+                emphasis: {
+                    label: { show: true, fontSize: 16, fontWeight: 'bold' }
+                },
+                data: pieData.map(function (d) {
+                    return { value: d.value, name: d.name, itemStyle: { color: d.color } };
+                })
+            }]
+        });
+        $(window).on('resize', function () { chart.resize(); });
+    }
+
+    function initBarChart(barData) {
+        var dom = document.getElementById('chart-bar');
+        if (!dom || !barData || barData.length === 0) return;
+        var chart = echarts.init(dom);
+
+        var categories = barData.map(function (d) { return d.name; }).reverse();
+        var outOfStockSeries = barData.map(function (d) { return d.outOfStock; }).reverse();
+        var lowStockSeries = barData.map(function (d) { return d.lowStock; }).reverse();
+
+        chart.setOption({
+            tooltip: {
+                trigger: 'axis',
+                axisPointer: { type: 'shadow' },
+                formatter: function (params) {
+                    var s = '<b>' + params[0].name + '</b><br/>';
+                    params.forEach(function (p) {
+                        s += p.marker + ' ' + p.seriesName + ': ' + p.value + ' 种<br/>';
+                    });
+                    return s;
+                }
+            },
+            legend: {
+                bottom: 0,
+                itemWidth: 10,
+                itemHeight: 10,
+                textStyle: { fontSize: 12 }
+            },
+            grid: { left: '3%', right: '8%', top: '3%', bottom: '10%', containLabel: true },
+            xAxis: { type: 'value', minInterval: 1 },
+            yAxis: {
+                type: 'category',
+                data: categories,
+                axisLabel: { fontSize: 11, width: 80, overflow: 'truncate' }
+            },
+            series: [
+                {
+                    name: '缺货',
+                    type: 'bar',
+                    stack: 'total',
+                    emphasis: { focus: 'series' },
+                    itemStyle: { color: '#dc2626', borderRadius: [0, 0, 2, 2] },
+                    data: outOfStockSeries
+                },
+                {
+                    name: '低库存',
+                    type: 'bar',
+                    stack: 'total',
+                    emphasis: { focus: 'series' },
+                    itemStyle: { color: '#f59e0b', borderRadius: outOfStockSeries.map(function (v, i) {
+                        return v === 0 ? [2, 2, 0, 0] : [0, 0, 2, 2];
+                    })},
+                    data: lowStockSeries
+                }
+            ]
+        });
+        $(window).on('resize', function () { chart.resize(); });
+    }
+
+    // CountUp 动画
+    function animateCount(elId, target) {
+        var el = document.getElementById(elId);
+        if (!el || target <= 0) return;
+        var start = 0;
+        var duration = 1000;
+        var step = Math.ceil(target / (duration / 16));
+        var timer = setInterval(function () {
+            start += step;
+            if (start >= target) {
+                start = target;
+                clearInterval(timer);
+            }
+            el.textContent = start;
+        }, 16);
+    }
+
+    // 前端筛选
+    function applyFilters() {
+        var keyword = ($('#filterKeyword').val() || '').toLowerCase();
+        var level = $('#filterLevel').val();
+        var warehouse = $('#filterWarehouse').val();
+        var category = $('#filterCategory').val();
+        var visibleCount = 0;
+        var $rows = $('#warningTable tbody tr:not(.empty-row)');
+
+        $rows.each(function () {
+            var $row = $(this);
+            var rowLevel = $row.data('level') || '';
+            var rowWarehouse = ($row.data('warehouse') || '').toString();
+            var rowCategory = ($row.data('category') || '').toString();
+            var text = $row.text().toLowerCase();
+
+            var matchLevel = !level || rowLevel === level;
+            var matchWarehouse = !warehouse || rowWarehouse === warehouse;
+            var matchCategory = !category || rowCategory === category;
+            var matchKeyword = !keyword || text.indexOf(keyword) >= 0;
+            var visible = matchKeyword && matchLevel && matchWarehouse && matchCategory;
+            $row.toggle(visible);
+            if (visible) visibleCount++;
+        });
+
+        $('#filteredCount').text(visibleCount);
+
+        var $empty = $('#filterEmpty');
+        var $table = $('#warningTable');
+        if (visibleCount === 0 && $rows.length > 0) {
+            $table.hide();
+            $empty.show();
+        } else {
+            $table.show();
+            $empty.hide();
+        }
+    }
+
+    function filterTable(level) {
+        $('#filterLevel').val(level);
+        applyFilters();
+    }
+
+    function resetFilters() {
+        $('#filterKeyword').val('');
+        $('#filterLevel').val('');
+        $('#filterWarehouse').val('');
+        $('#filterCategory').val('');
+        applyFilters();
+    }
+
+    function navigateToProduct(productId) {
+        window.location.href = '/Product/Details/' + productId;
+    }
+
+    function exportToExcel() {
+        var keyword = $('#filterKeyword').val() || '';
+        var level = $('#filterLevel').val() || '';
+        var warehouseId = $('#filterWarehouse').val() || '';
+        var params = [];
+        if (keyword) params.push('keyword=' + encodeURIComponent(keyword));
+        if (level) params.push('level=' + encodeURIComponent(level));
+        if (warehouseId) params.push('warehouseId=' + warehouseId);
+        window.location.href = '/Stock/ExportWarningToExcel' + (params.length ? '?' + params.join('&') : '');
+    }
+</script>
+}

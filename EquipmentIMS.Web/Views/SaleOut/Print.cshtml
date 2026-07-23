@@ -1,0 +1,194 @@
+@model EquipmentIMS.Models.DTOs.SaleOutDto
+@{
+    Layout = "~/Views/Shared/PrintLayout.cshtml";
+    ViewData["Title"] = $"出库单 - {Model.OutNo}";
+    var companyName = ViewData["CompanyName"]?.ToString() ?? "郑州恒锐自动化设备有限公司";
+    var companyAddress = ViewData["CompanyAddress"]?.ToString() ?? "";
+    var companyPhone = ViewData["CompanyPhone"]?.ToString() ?? "";
+}
+
+<style>
+    .header { text-align: center; margin-bottom: 18px; }
+    .header h2 { font-size: 20px; letter-spacing: 4px; margin-bottom: 2px; }
+    .header .subtitle { font-size: 12px; color: #555; margin-bottom: 10px; }
+    .header h3 { font-size: 17px; letter-spacing: 6px; margin-top: 8px; }
+
+    .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 40px; margin-bottom: 14px; font-size: 13px; }
+    .info-grid .info-label { font-weight: bold; white-space: nowrap; }
+    .info-grid .info-value { }
+
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+    table th, table td { border: 1px solid #000; padding: 5px 6px; font-size: 12px; text-align: center; }
+    table thead th { background: #f5f5f5; font-weight: bold; }
+    table .text-right { text-align: right; }
+    table .text-left { text-align: left; }
+    .total-row td { font-weight: bold; }
+
+    .amount-cn { margin-top: 10px; font-size: 12px; font-weight: bold; }
+
+    .footer { margin-top: 36px; display: flex; justify-content: space-between; }
+    .footer .sig-block { text-align: center; flex: 1; }
+    .footer .sig-line { border-bottom: 1px solid #000; margin: 0 20px 6px; min-height: 28px; }
+    .footer .sig-label { font-size: 11px; color: #555; }
+
+    .remark-line { margin-top: 20px; font-size: 12px; }
+    .remark-line .remark-label { font-weight: bold; }
+
+    .print-time { text-align: center; margin-top: 14px; font-size: 11px; color: #999; }
+
+    @@media print {
+        table thead th { background: #f5f5f5 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    }
+</style>
+
+<div class="header">
+    <h2>@companyName</h2>
+    @if (!string.IsNullOrEmpty(companyAddress) || !string.IsNullOrEmpty(companyPhone))
+    {
+        <div class="subtitle">
+            @(string.IsNullOrEmpty(companyAddress) ? "" : $"地址：{companyAddress}　　")@(string.IsNullOrEmpty(companyPhone) ? "" : $"电话：{companyPhone}")
+        </div>
+    }
+    <h3>销 售 出 库 单</h3>
+</div>
+
+<div class="info-grid">
+    <div><span class="info-label">出库单号：</span><span class="info-value">@Model.OutNo</span></div>
+    <div><span class="info-label">日期：</span><span class="info-value">@Model.OutTime.ToString("yyyy-MM-dd")</span></div>
+    <div><span class="info-label">客户名称：</span><span class="info-value">@Model.CustomerName</span></div>
+    <div><span class="info-label">销售订单：</span><span class="info-value">@Model.SaleOrderNo</span></div>
+    <div><span class="info-label">仓库：</span><span class="info-value">@Model.WarehouseName</span></div>
+    <div><span class="info-label">经办人：</span><span class="info-value">@Model.Operator</span></div>
+</div>
+
+<table>
+    <thead>
+        <tr>
+            <th style="width:32px">序号</th>
+            <th>设备编码</th>
+            <th>设备名称</th>
+            <th>规格</th>
+            <th style="width:50px">数量</th>
+            <th style="width:72px">单价</th>
+            <th style="width:80px">金额</th>
+        </tr>
+    </thead>
+    <tbody>
+        @{
+            int totalQty = 0;
+            int rowCount = Math.Max(Model.Details.Count, 6);
+        }
+        @for (var i = 0; i < rowCount; i++)
+        {
+            if (i < Model.Details.Count)
+            {
+                var d = Model.Details[i];
+                totalQty += d.Qty;
+                <tr>
+                    <td>@(i + 1)</td>
+                    <td class="text-left">@d.ProductCode</td>
+                    <td class="text-left">@d.ProductName</td>
+                    <td class="text-left">@d.ProductSpec</td>
+                    <td class="text-right">@d.Qty</td>
+                    <td class="text-right">@d.UnitPrice.ToString("F2")</td>
+                    <td class="text-right">@d.Amount.ToString("F2")</td>
+                </tr>
+            }
+            else
+            {
+                <tr>
+                    <td>@(i + 1)</td>
+                    <td></td><td></td><td></td><td></td><td></td><td></td>
+                </tr>
+            }
+        }
+        <tr class="total-row">
+            <td colspan="4">合 计</td>
+            <td class="text-right">@totalQty</td>
+            <td></td>
+            <td class="text-right">@Model.TotalAmount.ToString("F2")</td>
+        </tr>
+    </tbody>
+</table>
+
+<div class="amount-cn">
+    金额大写：@AmountToChinese(Model.TotalAmount)
+</div>
+
+@if (!string.IsNullOrEmpty(Model.Remark))
+{
+    <div class="remark-line">
+        <span class="remark-label">备注：</span>@Model.Remark
+    </div>
+}
+
+<div class="footer">
+    <div class="sig-block">
+        <div class="sig-line">@Model.Operator</div>
+        <div class="sig-label">制单人</div>
+    </div>
+    <div class="sig-block">
+        <div class="sig-line"></div>
+        <div class="sig-label">仓库管理员</div>
+    </div>
+    <div class="sig-block">
+        <div class="sig-line"></div>
+        <div class="sig-label">客户签字</div>
+    </div>
+</div>
+
+<div class="print-time">打印时间：@DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")</div>
+
+@functions {
+    static string AmountToChinese(decimal amount)
+    {
+        if (amount == 0) return "零元整";
+        var digits = new[] { "零", "壹", "贰", "叁", "肆", "伍", "陆", "柒", "捌", "玖" };
+        var units = new[] { "", "拾", "佰", "仟", "万", "拾", "佰", "仟", "亿" };
+        var integerPart = (long)Math.Floor(amount);
+        var decimalPart = (int)((amount - integerPart) * 100 + 0.5m);
+
+        if (integerPart == 0)
+            return "零元" + (decimalPart > 0 ? $"{digits[decimalPart / 10]}角{digits[decimalPart % 10]}分" : "整");
+
+        var s = "";
+        var numStr = integerPart.ToString();
+        var len = numStr.Length;
+        bool hasZero = false;
+
+        for (var i = 0; i < len; i++)
+        {
+            var n = numStr[i] - '0';
+            var unitIdx = len - i - 1;
+
+            if (n == 0)
+            {
+                hasZero = true;
+                if (unitIdx % 4 == 0)
+                {
+                    s += units[unitIdx];
+                    hasZero = false;
+                }
+            }
+            else
+            {
+                if (hasZero) { s += "零"; hasZero = false; }
+                s += digits[n] + units[unitIdx];
+            }
+        }
+
+        s = s.TrimEnd('零') + "元";
+
+        if (decimalPart > 0)
+        {
+            s += $"{digits[decimalPart / 10]}角";
+            if (decimalPart % 10 > 0) s += $"{digits[decimalPart % 10]}分";
+        }
+        else
+        {
+            s += "整";
+        }
+
+        return s;
+    }
+}

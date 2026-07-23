@@ -1,0 +1,97 @@
+@model PagedResult<EquipmentIMS.Models.DTOs.ProductDto>
+@{
+    ViewData["Title"] = "设备主数据";
+    var keyword = ViewData["Keyword"] as string;
+    var categoryId = ViewData["CategoryId"] as long?;
+}
+
+<div class="content-card">
+    <div class="content-header">
+        <h4><i class="bi bi-cpu me-2"></i>设备主数据</h4>
+        <div>
+            <a asp-action="Import" class="btn btn-outline-success btn-sm"><i class="bi bi-upload me-1"></i>Excel导入</a>
+            <a asp-action="Create" class="btn btn-primary btn-sm ms-1"><i class="bi bi-plus-lg me-1"></i>新增设备</a>
+        </div>
+    </div>
+
+    <form class="search-bar" method="get" asp-action="Index">
+        <input type="text" name="keyword" class="form-control" placeholder="编码/名称/规格" value="@keyword" />
+        <select name="categoryId" class="form-select" style="width:180px">
+            <option value="">全部分类</option>
+            @{
+                var cats1 = ViewBag.Categories as List<EquipmentIMS.Models.DTOs.CategoryTreeDto>;
+                if (cats1 != null) { await RenderCatOptions(cats1, 0, categoryId); }
+            }
+        </select>
+        <button type="submit" class="btn btn-outline-secondary"><i class="bi bi-search me-1"></i>搜索</button>
+    </form>
+
+    <div class="table-responsive">
+        <table class="table data-table">
+            <thead><tr>
+                <th>编码</th><th>名称</th><th>分类</th><th>规格型号</th><th>品牌</th><th>单位</th><th>采购价</th><th>销售价</th><th>操作</th>
+            </tr></thead>
+            <tbody>
+                @if (!Model.Items.Any())
+                {
+                    <tr><td colspan="9" class="text-center text-muted py-4">暂无数据</td></tr>
+                }
+                @foreach (var item in Model.Items)
+                {
+                    <tr>
+                        <td>@item.Code</td>
+                        <td>@item.Name</td>
+                        <td>@item.CategoryName</td>
+                        <td>@item.Spec</td>
+                        <td>@item.Brand</td>
+                        <td>@item.Unit</td>
+                        <td>@item.PurchasePrice.ToString("N2")</td>
+                        <td>@item.SalePrice.ToString("N2")</td>
+                        <td style="width:100px">
+                            <a asp-action="Edit" asp-route-id="@item.Id" class="btn btn-sm btn-outline-primary" title="编辑"><i class="bi bi-pencil"></i></a>
+                            <button class="btn btn-sm btn-outline-danger" onclick="deleteProduct(@item.Id)" title="删除"><i class="bi bi-trash"></i></button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+
+    @{
+        ViewData["Page"] = Model.Page;
+        ViewData["PageSize"] = Model.PageSize;
+        ViewData["TotalCount"] = Model.TotalCount;
+        @await Html.PartialAsync("_Pager")
+    }
+</div>
+
+@functions {
+    async Task RenderCatOptions(List<EquipmentIMS.Models.DTOs.CategoryTreeDto> nodes, int depth, long? selectedId)
+    {
+        foreach (var n in nodes)
+        {
+            var prefix = depth > 0 ? new string(' ', depth * 2) + "┗ " : "";
+            var sel = n.Id == selectedId;
+            if (sel)
+            {
+                <option value="@n.Id" selected="selected">@prefix@n.Name</option>
+            }
+            else
+            {
+                <option value="@n.Id">@prefix@n.Name</option>
+            }
+            if (n.Children.Any()) { await RenderCatOptions(n.Children, depth + 1, selectedId); }
+        }
+    }
+}
+
+@section Scripts {
+    <script>
+        function deleteProduct(id) {
+            if (!confirm('确认删除？')) return;
+            ajaxPost('/Product/Delete', { id: id }, function (res) {
+                location.reload();
+            });
+        }
+    </script>
+}

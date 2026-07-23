@@ -1,0 +1,134 @@
+@model PagedResult<EquipmentIMS.Models.DTOs.RepairOrderListDto>
+@{
+    ViewData["Title"] = "维修工单管理";
+    var status = ViewData["Status"] as int?;
+    var technicianId = ViewData["TechnicianId"] as long?;
+    var statusList = ViewData["StatusList"] as SelectList;
+    var technicianList = ViewData["TechnicianList"] as SelectList;
+}
+
+<div class="content-card">
+    <div class="content-header">
+        <h4><i class="bi bi-tools me-2"></i>维修工单管理</h4>
+        <a asp-action="Create" class="btn btn-primary btn-sm"><i class="bi bi-plus-lg me-1"></i>新建工单</a>
+    </div>
+
+    <div class="search-bar mb-3">
+        <div class="d-flex gap-2 align-items-center flex-wrap">
+            <select id="searchStatus" class="form-select" style="max-width:130px" onchange="doSearch()">
+                @if (statusList != null)
+                {
+                    @foreach (var item in statusList)
+                    {
+                        var val = string.IsNullOrEmpty(item.Value) ? "" : item.Value;
+                        var selected = (!status.HasValue && string.IsNullOrEmpty(item.Value))
+                            || (status.HasValue && status.Value.ToString() == item.Value) ? "selected" : null;
+                        <option value="@val" selected="@selected">@item.Text</option>
+                    }
+                }
+            </select>
+            @if (technicianList != null)
+            {
+                <select id="searchTechnicianId" class="form-select" style="max-width:160px" onchange="doSearch()">
+                    <option value="">全部技术员</option>
+                    @foreach (var item in technicianList)
+                    {
+                        var selected = technicianId.HasValue && technicianId.Value.ToString() == item.Value ? "selected" : null;
+                        <option value="@item.Value" selected="@selected">@item.Text</option>
+                    }
+                </select>
+            }
+            <button type="button" class="btn btn-outline-secondary" onclick="doSearch()"><i class="bi bi-search me-1"></i>搜索</button>
+            <button type="button" class="btn btn-outline-secondary" onclick="doReset()"><i class="bi bi-arrow-repeat me-1"></i>重置</button>
+        </div>
+    </div>
+
+    <div class="table-responsive">
+        <table class="table data-table">
+            <thead>
+                <tr>
+                    <th>工单号</th>
+                    <th>序列号</th>
+                    <th>设备</th>
+                    <th>客户</th>
+                    <th>故障描述</th>
+                    <th>状态</th>
+                    <th>技术员</th>
+                    <th>保修</th>
+                    <th>费用</th>
+                    <th>完成时间</th>
+                    <th>创建时间</th>
+                    <th style="width:80px">操作</th>
+                </tr>
+            </thead>
+            <tbody>
+                @if (!Model.Items.Any())
+                {
+                    <tr><td colspan="12" class="text-center text-muted py-4">暂无数据</td></tr>
+                }
+                @foreach (var item in Model.Items)
+                {
+                    <tr>
+                        <td><span class="fw-medium">@item.OrderNo</span></td>
+                        <td>@item.SerialNo</td>
+                        <td>@item.ProductName</td>
+                        <td>@item.CustomerName</td>
+                        <td style="max-width:160px" class="text-truncate" title="@item.FaultDesc">@item.FaultDesc</td>
+                        <td>@StatusBadge(item.Status, item.StatusName)</td>
+                        <td>@(item.TechnicianName ?? "-")</td>
+                        <td>
+                            @if (item.IsWarranty)
+                            {<span class="badge bg-success">是</span>}
+                            else
+                            {<span class="badge bg-secondary">否</span>}
+                        </td>
+                        <td>@item.TotalCost.ToString("F2")</td>
+                        <td>@(item.CompleteTime?.ToString("yyyy-MM-dd") ?? "-")</td>
+                        <td>@item.CreateTime.ToString("yyyy-MM-dd")</td>
+                        <td><a asp-action="Details" asp-route-id="@item.Id" class="btn btn-sm btn-outline-info" title="详情"><i class="bi bi-eye"></i></a></td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+
+    @{
+        ViewData["Page"] = Model.Page;
+        ViewData["PageSize"] = Model.PageSize;
+        ViewData["TotalCount"] = Model.TotalCount;
+        @await Html.PartialAsync("_Pager")
+    }
+</div>
+
+@functions {
+    Microsoft.AspNetCore.Html.IHtmlContent StatusBadge(int st, string? name)
+    {
+        var cls = st switch
+        {
+            0 or 1 => "bg-info",
+            2 => "bg-warning text-dark",
+            3 => "bg-primary",
+            4 => "bg-success",
+            5 => "bg-secondary",
+            6 => "bg-dark",
+            _ => "bg-light text-dark"
+        };
+        return new Microsoft.AspNetCore.Html.HtmlString($"<span class=\"badge {cls}\">{name}</span>");
+    }
+}
+
+<script>
+    function doSearch() {
+        var url = new URL(window.location.href);
+        var st = document.getElementById('searchStatus').value;
+        var tid = document.getElementById('searchTechnicianId')?.value;
+        if (st) url.searchParams.set('status', st); else url.searchParams.delete('status');
+        if (tid) url.searchParams.set('technicianId', tid); else url.searchParams.delete('technicianId');
+        url.searchParams.set('page', 1);
+        window.location.href = url.toString();
+    }
+
+    function doReset() {
+        window.location.href = '@Url.Action("Index")';
+    }
+</script>

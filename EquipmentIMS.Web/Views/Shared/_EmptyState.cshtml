@@ -1,0 +1,20 @@
+@* 空数据状态组件 *@
+@* 参数: ViewData["EmptyIcon"] (默认 bi-inbox), ViewData["EmptyText"] (默认 "暂无数据"), ViewData["EmptyDesc"], ViewData["EmptyAction"] *@
+@{
+    var icon = ViewData["EmptyIcon"] as string ?? "bi-inbox";
+    var text = ViewData["EmptyText"] as string ?? "暂无数据";
+    var desc = ViewData["EmptyDesc"] as string;
+    var action = ViewData["EmptyAction"] as IHtmlContent;
+}
+<div class="empty-state">
+    <i class="bi @icon"></i>
+    <div class="empty-text">@text</div>
+    @if (!string.IsNullOrEmpty(desc))
+    {
+        <div class="empty-desc">@desc</div>
+    }
+    @if (action != null)
+    {
+        @action
+    }
+</div>

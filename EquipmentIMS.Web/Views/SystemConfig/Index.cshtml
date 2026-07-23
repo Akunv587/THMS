@@ -1,0 +1,94 @@
+@model EquipmentIMS.Web.ViewModels.SystemConfigEditViewModel
+@{
+    ViewData["Title"] = "系统配置";
+}
+
+<div class="content-card">
+    <div class="content-header">
+        <h4><i class="bi bi-gear me-2"></i>系统配置管理</h4>
+        <a asp-action="Edit" class="btn btn-primary btn-sm">
+            <i class="bi bi-pencil-square me-1"></i>编辑配置
+        </a>
+    </div>
+
+    @if (TempData["Message"] != null)
+    {
+        <div class="alert alert-success alert-dismissible fade show mb-3 mx-3 mt-3" role="alert">
+            <i class="bi bi-check-circle me-1"></i>@TempData["Message"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    }
+
+    @if (!Model.Groups.Any())
+    {
+        <div class="empty-state">
+            <i class="bi bi-inbox"></i>
+            <div class="empty-text">暂无配置项</div>
+        </div>
+    }
+    else
+    {
+        foreach (var group in Model.Groups)
+        {
+            <div class="card border-0 shadow-sm mb-3 mx-3 @(group == Model.Groups.First() ? "mt-3" : "")">
+                <div class="card-header bg-light d-flex align-items-center gap-2 py-2">
+                    <i class="bi @group.GroupIcon text-primary"></i>
+                    <span class="fw-semibold">@group.GroupName</span>
+                    <span class="badge bg-secondary ms-2">@group.Items.Count 项</span>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table data-table mb-0">
+                            <thead>
+                                <tr>
+                                    <th style="width:25%">配置键</th>
+                                    <th style="width:20%">名称</th>
+                                    <th style="width:30%">当前值</th>
+                                    <th style="width:25%">说明</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var item in group.Items)
+                                {
+                                    <tr>
+                                        <td><code class="text-primary">@item.ConfigKey</code></td>
+                                        <td>@item.ConfigName</td>
+                                        <td>
+                                            @RenderConfigValue(item)
+                                        </td>
+                                        <td><small class="text-muted">@item.Description</small></td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        }
+    }
+</div>
+
+@functions {
+    /// <summary>根据配置类型渲染只读展示</summary>
+    string RenderConfigValue(ConfigItemViewModel item)
+    {
+        if (string.IsNullOrEmpty(item.ConfigValue))
+        {
+            return "<span class=\"text-muted\">(空)</span>";
+        }
+
+        return item.ConfigType switch
+        {
+            // 布尔类型：显示 启用/禁用 标签
+            3 => item.ConfigValue.Equals("true", StringComparison.OrdinalIgnoreCase)
+                ? "<span class=\"badge bg-success\">启用</span>"
+                : "<span class=\"badge bg-secondary\">禁用</span>",
+
+            // JSON 类型：截断显示
+            4 => $"<code class=\"text-muted small\">{System.Net.WebUtility.HtmlEncode(item.ConfigValue.Length > 60 ? item.ConfigValue[..60] + "..." : item.ConfigValue)}</code>",
+
+            // 数字/文本：直接展示
+            _ => $"<span>{System.Net.WebUtility.HtmlEncode(item.ConfigValue)}</span>"
+        };
+    }
+}

@@ -1,0 +1,311 @@
+@model EquipmentIMS.Web.Models.SaleOutViewModel
+@{
+    ViewData["Title"] = "新增销售出库";
+}
+
+<div class="content-card">
+    <div class="content-header">
+        <h4>@ViewData["Title"]</h4>
+        <a asp-action="Index" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i>返回</a>
+    </div>
+
+    <form asp-action="Create" method="post" id="outForm">
+        @Html.AntiForgeryToken()
+
+        @* 扫码输入区 *@
+        <partial name="_BarcodeScanner" />
+
+        @* 订单选择区 *@
+        <div class="row g-3 mb-4">
+            <div class="col-md-6">
+                <label class="form-label">销售订单 <span class="text-danger">*</span></label>
+                <select asp-for="SaleOrderId" class="form-select" id="SaleOrderId"
+                        style="width:100%">
+                    <option value="">请选择已审批的销售订单</option>
+                </select>
+                <span asp-validation-for="SaleOrderId" class="text-danger small"></span>
+            </div>
+            <div class="col-md-3">
+                <label asp-for="OutTime" class="form-label"></label>
+                <input asp-for="OutTime" type="datetime-local" class="form-control" />
+            </div>
+            <div class="col-md-3">
+                <label asp-for="Operator" class="form-label"></label>
+                <input asp-for="Operator" class="form-control" />
+            </div>
+        </div>
+
+        @* 订单信息区 *@
+        <div class="alert alert-light border d-none" id="orderInfo">
+            <div class="row">
+                <div class="col-md-4"><strong>订单号：</strong><span id="infoOrderNo">-</span></div>
+                <div class="col-md-4"><strong>客户：</strong><span id="infoCustomer">-</span></div>
+                <div class="col-md-4"><strong>已出库金额：</strong><span id="infoShipped" class="text-primary">-</span></div>
+            </div>
+        </div>
+
+        @* 出库明细表格 *@
+        <h6 class="mb-2">出库明细</h6>
+        <div class="table-responsive">
+            <table class="table data-table" id="detailTable">
+                <thead><tr>
+                    <th>设备编码</th><th>设备名称</th><th>仓库</th><th>订单数量</th><th>已出库</th><th style="width:100px">本次出库</th><th>可用库存</th><th>单价</th><th>金额</th>
+                </tr></thead>
+                <tbody id="detailBody">
+                    <tr id="emptyRow"><td colspan="9" class="text-center text-muted py-3">请先选择销售订单</td></tr>
+                </tbody>
+                <tfoot>
+                    <tr>
+                        <td colspan="8" class="text-end fw-bold">合计：</td>
+                        <td class="fw-bold text-danger" id="totalAmount">0.00</td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+
+        <div class="row g-3 mt-3">
+            <div class="col-12">
+                <label asp-for="Remark" class="form-label"></label>
+                <textarea asp-for="Remark" class="form-control" rows="2"></textarea>
+            </div>
+        </div>
+
+        <div class="mt-4">
+            <button type="submit" class="btn btn-primary" id="btnSubmit"><i class="bi bi-check-lg me-1"></i>确认出库</button>
+            <a asp-action="Index" class="btn btn-outline-secondary ms-2">取消</a>
+        </div>
+    </form>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    <script>
+        var detailIndex = 0;  // 明细行序号计数器
+
+        // 条码扫描回调：处理扫码枪/手动输入结果
+        function onBarcodeScanned(product) {
+            addOrUpdateDetailRow(product);
+        }
+
+        function addOrUpdateDetailRow(product) {
+            // 检查是否已在明细表中
+            var $existing = $('#detailBody .detail-row').filter(function () {
+                var pid = $(this).find('input[name*="ProductId"]').val();
+                return pid == product.id || $(this).find('td:first').text().trim() === product.code;
+            });
+
+            if ($existing.length > 0) {
+                // 已在表中 → 数量 +1
+                var $qty = $existing.find('.out-qty');
+                var avail = parseInt($existing.find('.avail-stock').text()) || 9999;
+                var curVal = parseInt($qty.val()) || 0;
+                var newVal = Math.min(curVal + 1, avail);
+                $qty.val(newVal).trigger('input');
+                flashRow($existing);
+            } else {
+                // 不在表中 → 新增行
+                var i = detailIndex++;
+                var price = (product.salePrice || product.purchasePrice || 0).toFixed(2);
+                var html = '<tr class="detail-row" data-product-id="' + product.id + '">'
+                    + '<td>' + product.code + '</td>'
+                    + '<td>' + product.name + '</td>'
+                    + '<td><span class="text-muted">-</span></td>'
+                    + '<td class="text-end text-muted">-</td>'
+                    + '<td class="text-end text-muted">-</td>'
+                    + '<td><input type="number" name="Details[' + i + '].OutQty" class="form-control form-control-sm out-qty" value="1" min="1" max="9999" />'
+                    + '<small class="text-muted">扫码新增</small></td>'
+                    + '<td class="text-end"><span class="avail-stock text-muted">-</span></td>'
+                    + '<td class="text-end">' + price + '</td>'
+                    + '<td class="text-end row-amount">' + price + '</td>'
+                    + '</tr>'
+                    + '<input type="hidden" name="Details[' + i + '].SaleOrderDetailId" value="0" />'
+                    + '<input type="hidden" name="Details[' + i + '].ProductId" value="' + product.id + '" />'
+                    + '<input type="hidden" name="Details[' + i + '].WarehouseId" value="0" />'
+                    + '<input type="hidden" name="Details[' + i + '].UnitPrice" value="' + price + '" />'
+                    + '<input type="hidden" name="Details[' + i + '].OrderQty" value="0" />'
+                    + '<input type="hidden" name="Details[' + i + '].ShippedQty" value="0" />'
+                    + '<input type="hidden" name="Details[' + i + '].AvailableStock" value="0" />'
+                    + '<input type="hidden" name="Details[' + i + '].ProductName" value="' + product.name + '" />'
+                    + '<input type="hidden" name="Details[' + i + '].ProductCode" value="' + product.code + '" />'
+                    + '<input type="hidden" name="Details[' + i + '].WarehouseName" value="" />';
+                $('#emptyRow').remove();
+                $('#detailBody').append(html);
+            }
+            calcTotal();
+            $('#btnSubmit').prop('disabled', false);
+        }
+
+        function flashRow($row) {
+            $row.css('background-color', '#d1fae5');
+            setTimeout(function () { $row.css('background-color', ''); }, 800);
+        }
+
+        function showFeedback(msg, cls) {
+            var $fb = $('#scanFeedback');
+            if ($fb.length) {
+                $fb.removeClass('text-muted text-success text-danger text-warning').addClass(cls || 'text-muted').html(msg);
+            }
+        }
+
+        function loadOrderDetails(orderId) {
+            if (!orderId) {
+                $('#detailBody').html('<tr id="emptyRow"><td colspan="9" class="text-center text-muted py-3">请先选择销售订单</td></tr>');
+                $('#orderInfo').addClass('d-none');
+                $('#totalAmount').text('0.00');
+                return;
+            }
+
+            $.getJSON('@Url.Action("GetOrderDetails")', { saleOrderId: orderId }, function (res) {
+                if (!res.success) {
+                    showError(res.message);
+                    return;
+                }
+                renderDetails(res.data);
+            }).fail(function () {
+                showError('加载订单明细失败');
+            });
+        }
+
+        function renderDetails(details) {
+            var selectedOption = $('#SaleOrderId').select2('data')[0];
+            if (selectedOption) {
+                $('#infoOrderNo').text(selectedOption.text);
+                $('#infoCustomer').text(selectedOption.customerName || '-');
+                $('#infoShipped').text(parseFloat(selectedOption.shippedAmount || 0).toFixed(2));
+                $('#orderInfo').removeClass('d-none');
+            }
+
+            var html = '';
+            detailIndex = 0;  // 切换订单时重置序号
+            if (details.length === 0) {
+                html = '<tr><td colspan="9" class="text-center text-muted py-3">该订单无可出库明细</td></tr>';
+            } else {
+                $.each(details, function (i, d) {
+                    var remainingQty = d.orderQty - d.shippedQty;
+                    if (remainingQty <= 0) return;
+                    html += '<tr class="detail-row">'
+                        + '<td>' + d.productCode + '</td>'
+                        + '<td>' + d.productName + '</td>'
+                        + '<td>' + d.warehouseName + '</td>'
+                        + '<td class="text-end">' + d.orderQty + '</td>'
+                        + '<td class="text-end">' + d.shippedQty + '</td>'
+                        + '<td><input type="number" name="Details[' + detailIndex + '].OutQty" class="form-control form-control-sm out-qty" value="0" min="0" max="' + remainingQty + '" />'
+                        + '<small class="text-muted">剩余可出: ' + remainingQty + '</small></td>'
+                        + '<td class="text-end">'
+                        + '<span class="avail-stock">' + d.availableStock + '</span>'
+                        + '</td>'
+                        + '<td class="text-end">' + d.unitPrice.toFixed(2) + '</td>'
+                        + '<td class="text-end row-amount">0.00</td>'
+                        + '</tr>'
+                        + '<input type="hidden" name="Details[' + detailIndex + '].SaleOrderDetailId" value="' + d.saleOrderDetailId + '" />'
+                        + '<input type="hidden" name="Details[' + detailIndex + '].ProductId" value="' + d.productId + '" />'
+                        + '<input type="hidden" name="Details[' + detailIndex + '].WarehouseId" value="' + d.warehouseId + '" />'
+                        + '<input type="hidden" name="Details[' + detailIndex + '].UnitPrice" value="' + d.unitPrice + '" />'
+                        + '<input type="hidden" name="Details[' + detailIndex + '].OrderQty" value="' + d.orderQty + '" />'
+                        + '<input type="hidden" name="Details[' + detailIndex + '].ShippedQty" value="' + d.shippedQty + '" />'
+                        + '<input type="hidden" name="Details[' + detailIndex + '].AvailableStock" value="' + d.availableStock + '" />'
+                        + '<input type="hidden" name="Details[' + detailIndex + '].ProductName" value="' + d.productName + '" />'
+                        + '<input type="hidden" name="Details[' + detailIndex + '].ProductCode" value="' + d.productCode + '" />'
+                        + '<input type="hidden" name="Details[' + detailIndex + '].WarehouseName" value="' + d.warehouseName + '" />';
+                    detailIndex++;
+                });
+                if (!html) html = '<tr><td colspan="9" class="text-center text-muted py-3">该订单无可出库明细</td></tr>';
+            }
+            $('#detailBody').html(html);
+            calcTotal();
+        }
+
+        function calcRow() {
+            var $row = $(this).closest('.detail-row');
+            var qty = parseInt($(this).val()) || 0;
+            var price = parseFloat($row.find('input[name*="UnitPrice"]').val()) || 0;
+            var availStock = parseInt($row.find('input[name*="AvailableStock"]').val()) || 0;
+
+            if (qty > availStock) {
+                $(this).addClass('is-invalid');
+            } else {
+                $(this).removeClass('is-invalid');
+            }
+
+            $row.find('.row-amount').text((qty * price).toFixed(2));
+            calcTotal();
+        }
+
+        function calcTotal() {
+            var total = 0;
+            $('#detailBody .detail-row').each(function () {
+                var qty = parseInt($(this).find('.out-qty').val()) || 0;
+                var price = parseFloat($(this).find('input[name*="UnitPrice"]').val()) || 0;
+                total += qty * price;
+            });
+            $('#totalAmount').text(total.toFixed(2));
+        }
+
+        $(function () {
+            // 选订单
+            $('#SaleOrderId').select2({
+                ajax: {
+                    url: '@Url.Action("GetApprovedOrders")',
+                    dataType: 'json',
+                    delay: 300,
+                    data: function (params) { return { keyword: params.term }; },
+                    processResults: function (res) {
+                        return {
+                            results: (res.data || []).map(function (item) {
+                                return {
+                                    id: item.id,
+                                    text: item.orderNo + ' - ' + item.customerName,
+                                    customerName: item.customerName,
+                                    totalAmount: item.totalAmount,
+                                    shippedAmount: item.shippedAmount
+                                };
+                            })
+                        };
+                    }
+                },
+                placeholder: '搜索销售订单号',
+                allowClear: true,
+                width: '100%'
+            }).on('select2:select', function (e) {
+                loadOrderDetails(e.params.data.id);
+            }).on('select2:clear', function () {
+                $('#detailBody').html('<tr id="emptyRow"><td colspan="9" class="text-center text-muted py-3">请先选择销售订单</td></tr>');
+                $('#orderInfo').addClass('d-none');
+                $('#totalAmount').text('0.00');
+            });
+
+            // 出库数量输入
+            $(document).on('input', '.out-qty', calcRow);
+
+            // 表单提交确认
+            $('#outForm').submit(function () {
+                var hasQty = false;
+                $('.out-qty').each(function () {
+                    if (parseInt($(this).val()) > 0) hasQty = true;
+                });
+                if (!hasQty) {
+                    showError('至少输入一条出库数量');
+                    return false;
+                }
+
+                var hasError = false;
+                $('.out-qty').each(function () {
+                    if ($(this).hasClass('is-invalid')) hasError = true;
+                });
+                if (hasError) {
+                    showError('出库数量超过可用库存，请修正');
+                    return false;
+                }
+
+                return confirm('确认执行出库操作？');
+            });
+
+            // 如果 URL 中有 saleOrderId 参数，自动选中
+            var urlParams = new URLSearchParams(window.location.search);
+            var preSelectId = urlParams.get('saleOrderId');
+            if (preSelectId) {
+                loadOrderDetails(preSelectId);
+            }
+        });
+    </script>
+}

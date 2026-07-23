@@ -1,0 +1,154 @@
+@model PagedResult<EquipmentIMS.Models.DTOs.DeviceArchiveListDto>
+@{
+    ViewData["Title"] = "设备档案管理";
+    var serialNo = ViewData["SerialNo"] as string;
+    var customerId = ViewData["CustomerId"] as long?;
+    var status = ViewData["Status"] as int?;
+    var customerList = ViewData["CustomerList"] as SelectList;
+    var statusList = ViewData["StatusList"] as SelectList;
+}
+
+<div class="content-card">
+    <div class="content-header">
+        <h4><i class="bi bi-pc-display me-2"></i>设备档案管理</h4>
+        <a asp-action="Create" class="btn btn-primary btn-sm"><i class="bi bi-plus-lg me-1"></i>新建设备档案</a>
+    </div>
+
+    <div class="search-bar mb-3">
+        <div class="d-flex gap-2 align-items-center">
+            <input type="text" id="searchSerialNo" class="form-control" placeholder="序列号" value="@serialNo" style="max-width:180px" onkeyup="onSearchKeyup(event)" />
+            <select id="searchCustomerId" class="form-select" style="max-width:200px" onchange="doSearch()">
+                <option value="">全部客户</option>
+                @if (customerList != null)
+                {
+                    @foreach (var item in customerList)
+                    {
+                        var selected = customerId.HasValue && customerId.Value.ToString() == item.Value ? "selected" : null;
+                        <option value="@item.Value" selected="@selected">@item.Text</option>
+                    }
+                }
+            </select>
+            <select id="searchStatus" class="form-select" style="max-width:140px" onchange="doSearch()">
+                @if (statusList != null)
+                {
+                    @foreach (var item in statusList)
+                    {
+                        var val = string.IsNullOrEmpty(item.Value) ? "" : int.Parse(item.Value).ToString();
+                        var selected = (!status.HasValue && string.IsNullOrEmpty(item.Value)) || (status.HasValue && status.Value.ToString() == item.Value) ? "selected" : null;
+                        <option value="@item.Value" selected="@selected">@item.Text</option>
+                    }
+                }
+            </select>
+            <button type="button" class="btn btn-outline-secondary" onclick="doSearch()"><i class="bi bi-search me-1"></i>搜索</button>
+            <button type="button" class="btn btn-outline-secondary" onclick="doReset()"><i class="bi bi-arrow-repeat me-1"></i>重置</button>
+        </div>
+        <div id="scanSearch" class="mt-2" style="display:none">
+            <div class="input-group" style="max-width:320px">
+                <input type="text" id="scanInput" class="form-control" placeholder="扫码查询（序列号/条码）" onkeydown="onScanEnter(event)" />
+                <button type="button" class="btn btn-outline-info" onclick="doScanSearch()"><i class="bi bi-upc-scan"></i></button>
+            </div>
+        </div>
+    </div>
+
+    <div class="table-responsive">
+        <table class="table data-table">
+            <thead>
+                <tr>
+                    <th>序列号</th>
+                    <th>设备产品</th>
+                    <th>客户</th>
+                    <th>状态</th>
+                    <th>安装日期</th>
+                    <th>保修截止</th>
+                    <th>创建时间</th>
+                    <th style="width:140px">操作</th>
+                </tr>
+            </thead>
+            <tbody>
+                @if (!Model.Items.Any())
+                {
+                    <tr><td colspan="8" class="text-center text-muted py-4">暂无数据</td></tr>
+                }
+                @foreach (var item in Model.Items)
+                {
+                    <tr>
+                        <td><span class="fw-medium">@item.SerialNo</span></td>
+                        <td>@item.ProductCode - @item.ProductName</td>
+                        <td>@item.CustomerName</td>
+                        <td>
+                            @{
+                                var badgeClass = item.Status switch
+                                {
+                                    1 => "bg-success",
+                                    2 => "bg-warning text-dark",
+                                    3 => "bg-secondary",
+                                    _ => "bg-light text-dark"
+                                };
+                            }
+                            <span class="badge @badgeClass">@item.StatusName</span>
+                        </td>
+                        <td>@(item.InstallDate?.ToString("yyyy-MM-dd") ?? "-")</td>
+                        <td>@(item.WarrantyEnd?.ToString("yyyy-MM-dd") ?? "-")</td>
+                        <td>@item.CreateTime.ToString("yyyy-MM-dd")</td>
+                        <td>
+                            <a asp-action="Details" asp-route-id="@item.Id" class="btn btn-sm btn-outline-info" title="详情"><i class="bi bi-eye"></i></a>
+                            <a asp-action="Edit" asp-route-id="@item.Id" class="btn btn-sm btn-outline-primary" title="编辑"><i class="bi bi-pencil"></i></a>
+                            <form asp-action="Delete" method="post" class="d-inline" onsubmit="return confirm('确认删除该设备档案？')">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="id" value="@item.Id" />
+                                <button type="submit" class="btn btn-sm btn-outline-danger" title="删除"><i class="bi bi-trash"></i></button>
+                            </form>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+
+    @{
+        ViewData["Page"] = Model.Page;
+        ViewData["PageSize"] = Model.PageSize;
+        ViewData["TotalCount"] = Model.TotalCount;
+        @await Html.PartialAsync("_Pager")
+    }
+</div>
+
+<script>
+    function doSearch() {
+        var url = new URL(window.location.href);
+        var sn = document.getElementById('searchSerialNo').value.trim();
+        var cid = document.getElementById('searchCustomerId').value;
+        var st = document.getElementById('searchStatus').value;
+        if (sn) url.searchParams.set('serialNo', sn); else url.searchParams.delete('serialNo');
+        if (cid) url.searchParams.set('customerId', cid); else url.searchParams.delete('customerId');
+        if (st) url.searchParams.set('status', st); else url.searchParams.delete('status');
+        url.searchParams.set('page', 1);
+        window.location.href = url.toString();
+    }
+
+    function doReset() {
+        window.location.href = '@Url.Action("Index")';
+    }
+
+    function onSearchKeyup(e) {
+        if (e.key === 'Enter') doSearch();
+    }
+
+    function onScanEnter(e) {
+        if (e.key === 'Enter') doScanSearch();
+    }
+
+    function doScanSearch() {
+        var val = document.getElementById('scanInput').value.trim();
+        if (!val) return;
+        fetch('@Url.Action("FindBySerialNo")' + '?serialNo=' + encodeURIComponent(val))
+            .then(r => r.json())
+            .then(data => {
+                if (data.success && data.data) {
+                    window.location.href = '@Url.Action("Details")' + '/' + data.data.id;
+                } else {
+                    alert(data.message || '未找到该设备');
+                }
+            });
+    }
+</script>

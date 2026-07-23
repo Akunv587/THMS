@@ -1,0 +1,99 @@
+@model EquipmentIMS.Models.DTOs.NotificationDto
+@{
+    ViewData["Title"] = "通知详情";
+    var refUrl = ViewData["RefUrl"] as string;
+    var refLabel = ViewData["RefLabel"] as string;
+}
+
+<div class="content-card form-card">
+    <div class="card-header d-flex align-items-center gap-2">
+        <a href="/Notification" class="text-decoration-none text-muted" title="返回列表">
+            <i class="bi bi-arrow-left"></i>
+        </a>
+        <span>通知详情</span>
+    </div>
+    <div class="card-body">
+        @* 类型 + 时间 *@
+        <div class="mb-3 d-flex align-items-center gap-2 flex-wrap">
+            <span class="badge @GetTypeBadgeClass(Model.NotificationType)">
+                <i class="bi @GetTypeIcon(Model.NotificationType) me-1"></i>
+                @Model.NotificationTypeName
+            </span>
+            @if (Model.IsRead)
+            {
+                <span class="text-muted small">
+                    <i class="bi bi-check2 me-1"></i>已读
+                    @if (Model.ReadTime.HasValue)
+                    {
+                        <span>于 @Model.ReadTime.Value.ToString("MM-dd HH:mm")</span>
+                    }
+                </span>
+            }
+            else
+            {
+                <span class="text-primary small">
+                    <i class="bi bi-circle-fill me-1" style="font-size:6px;"></i>未读
+                </span>
+            }
+        </div>
+
+        @* 标题 *@
+        <h5 class="mb-3">@Model.Title</h5>
+
+        @* 通知时间 *@
+        <div class="text-muted small mb-3">
+            <i class="bi bi-clock me-1"></i>@Model.CreateTime.ToString("yyyy-MM-dd HH:mm:ss")
+        </div>
+
+        @* 正文内容 *@
+        <div class="notification-detail-content p-3 bg-light rounded" style="line-height:1.8; white-space:pre-wrap;">
+            @(string.IsNullOrEmpty(Model.Content) ? "无内容" : Model.Content)
+        </div>
+
+        @* 关联业务 *@
+        @if (!string.IsNullOrEmpty(refUrl))
+        {
+            <div class="mt-3 p-3 bg-light rounded border-start border-4 border-primary">
+                <div class="small text-muted mb-1">关联业务</div>
+                <a href="@refUrl" class="fw-semibold text-decoration-none">
+                    <i class="bi bi-box-arrow-up-right me-1"></i>
+                    查看@(refLabel ?? "关联单据")
+                </a>
+            </div>
+            <div class="mt-2 text-muted small">
+                <i class="bi bi-info-circle me-1"></i>您也可以直接从通知列表点击跳转到关联业务页面
+            </div>
+        }
+    </div>
+    <div class="card-footer d-flex gap-2">
+        <a href="/Notification" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-arrow-left me-1"></i>返回列表
+        </a>
+        @if (!string.IsNullOrEmpty(refUrl))
+        {
+            <a href="@refUrl" class="btn btn-primary btn-sm">
+                <i class="bi bi-box-arrow-up-right me-1"></i>查看关联业务
+            </a>
+        }
+    </div>
+</div>
+
+@functions {
+    static string GetTypeIcon(int type) => type switch
+    {
+        1 => "bi-check-circle",
+        2 => "bi-exclamation-triangle",
+        3 => "bi-tools",
+        4 => "bi-gear",
+        _ => "bi-bell"
+    };
+
+    static string GetTypeBadgeClass(int type) => type switch
+    {
+        1 => "bg-primary",
+        2 => "bg-warning text-dark",
+        3 => "bg-info",
+        4 => "bg-secondary",
+        _ => "bg-secondary"
+    };
+}

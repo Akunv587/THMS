@@ -1,0 +1,194 @@
+@model EquipmentIMS.Web.ViewModels.SystemConfigEditViewModel
+@{
+    ViewData["Title"] = "编辑系统配置";
+}
+
+<div class="content-card">
+    <div class="content-header">
+        <h4><i class="bi bi-gear me-2"></i>编辑系统配置</h4>
+        <a asp-action="Index" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-x-lg me-1"></i>取消
+        </a>
+    </div>
+
+    <div class="card-body">
+        <form id="configEditForm" method="post" asp-action="Edit">
+            @Html.AntiForgeryToken()
+
+            @if (!Model.Groups.Any())
+            {
+                <div class="empty-state">
+                    <i class="bi bi-inbox"></i>
+                    <div class="empty-text">暂无可编辑配置项</div>
+                </div>
+            }
+            else
+            {
+                @* Accordion 分组展示 *@
+                <div class="accordion" id="configAccordion">
+                    @{
+                        var groupIndex = 0;
+                    }
+                    @foreach (var group in Model.Groups)
+                    {
+                        var collapseId = $"collapse-{groupIndex}";
+                        var headingId = $"heading-{groupIndex}";
+                        var isFirst = groupIndex == 0;
+
+                        <div class="accordion-item border mb-3 rounded shadow-sm">
+                            <h2 class="accordion-header" id="@headingId">
+                                <button class="accordion-button @(isFirst ? "" : "collapsed")" type="button"
+                                        data-bs-toggle="collapse" data-bs-target="#@collapseId"
+                                        aria-expanded="@(isFirst ? "true" : "false")" aria-controls="@collapseId">
+                                    <i class="bi @group.GroupIcon me-2 text-primary"></i>
+                                    <span class="fw-semibold">@group.GroupName</span>
+                                    <span class="badge bg-secondary ms-2">@group.Items.Count 项</span>
+                                </button>
+                            </h2>
+                            <div id="@collapseId" class="accordion-collapse collapse @(isFirst ? "show" : "")"
+                                 aria-labelledby="@headingId" data-bs-parent="#configAccordion">
+                                <div class="accordion-body">
+                                    @foreach (var item in group.Items)
+                                    {
+                                        <div class="row mb-3 align-items-start config-item-row">
+                                            <div class="col-md-4 col-lg-3">
+                                                <label class="form-label fw-medium mb-1" for="cfg_@item.ConfigKey">
+                                                    @item.ConfigName
+                                                </label>
+                                                <div>
+                                                    <code class="text-muted small">@item.ConfigKey</code>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-8 col-lg-9">
+                                                @RenderFormControl(item)
+                                                @if (!string.IsNullOrEmpty(item.Description))
+                                                {
+                                                    <div class="form-text text-muted small mt-1">
+                                                        <i class="bi bi-info-circle me-1"></i>@item.Description
+                                                    </div>
+                                                }
+                                            </div>
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+
+                        groupIndex++;
+                    }
+                </div>
+            }
+
+            <div class="d-flex justify-content-end gap-2 mt-4 pt-3 border-top">
+                <a asp-action="Index" class="btn btn-light">
+                    <i class="bi bi-x-lg me-1"></i>取消
+                </a>
+                <button type="submit" class="btn btn-primary" id="btnSaveConfig">
+                    <i class="bi bi-check-lg me-1"></i>保存配置
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+@functions {
+    /// <summary>根据 ConfigType 动态渲染表单控件</summary>
+    string RenderFormControl(ConfigItemViewModel item)
+    {
+        var fieldName = $"configValues[{item.ConfigKey}]";
+        var disabled = item.IsEditable ? "" : "disabled";
+        var id = $"cfg_{item.ConfigKey}";
+
+        return item.ConfigType switch
+        {
+            // 布尔类型 → Bootstrap Switch/Toggle
+            3 => RenderToggle(id, fieldName, item.ConfigValue, item.IsEditable),
+
+            // JSON 类型 → Textarea
+            4 => $"<textarea id=\"{id}\" name=\"{fieldName}\" class=\"form-control font-monospace small\" rows=\"3\" {disabled}>{System.Net.WebUtility.HtmlEncode(item.ConfigValue)}</textarea>",
+
+            // 数字类型 → input[type=number]
+            2 => $"<input type=\"number\" id=\"{id}\" name=\"{fieldName}\" class=\"form-control\" value=\"{System.Net.WebUtility.HtmlEncode(item.ConfigValue)}\" {disabled} />",
+
+            // 文本类型（默认）→ input[type=text]
+            _ => $"<input type=\"text\" id=\"{id}\" name=\"{fieldName}\" class=\"form-control\" value=\"{System.Net.WebUtility.HtmlEncode(item.ConfigValue)}\" {disabled} />"
+        };
+    }
+
+    /// <summary>渲染 Bootstrap 风格 Toggle 开关</summary>
+    string RenderToggle(string id, string name, string? value, bool editable)
+    {
+        var isChecked = string.Equals(value, "true", StringComparison.OrdinalIgnoreCase);
+        var disabledAttr = editable ? "" : "disabled";
+        var checkedAttr = isChecked ? "checked" : "";
+        var bgClass = isChecked ? "bg-success" : "bg-secondary";
+        var cursor = editable ? "pointer" : "not-allowed";
+        var label = isChecked ? "启用" : "禁用";
+
+        var sb = new System.Text.StringBuilder();
+        sb.Append("<div class=\"form-check form-switch d-flex align-items-center gap-2\">");
+        sb.AppendFormat("<input type=\"hidden\" name=\"{0}\" value=\"false\" />", name);
+        sb.AppendFormat("<input class=\"form-check-input\" type=\"checkbox\" role=\"switch\" id=\"{0}\" name=\"{0}\" value=\"true\" {1} {2} style=\"width:44px;height:22px;cursor:{3};\" />", name, checkedAttr, disabledAttr, cursor);
+        sb.AppendFormat("<label class=\"form-check-label small {0} text-white rounded-pill px-2 py-0\" for=\"{1}\" id=\"{1}_label\">{2}</label>", bgClass, id, label);
+        sb.Append("</div>");
+        return sb.ToString();
+    }
+}
+
+@section Scripts {
+<script>
+    $(function () {
+        // Toggle 开关标签联动
+        $('.form-check-input[role="switch"]').on('change', function () {
+            var $label = $('#' + this.id + '_label');
+            if (this.checked) {
+                $label.removeClass('bg-secondary').addClass('bg-success').text('启用');
+            } else {
+                $label.removeClass('bg-success').addClass('bg-secondary').text('禁用');
+            }
+        });
+
+        // AJAX 表单提交
+        $('#configEditForm').on('submit', function (e) {
+            e.preventDefault();
+
+            var $btn = $('#btnSaveConfig');
+            var origHtml = $btn.html();
+            $btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-1"></span>保存中...');
+
+            var formData = $(this).serialize();
+
+            $.ajax({
+                url: $(this).attr('action'),
+                type: 'POST',
+                data: formData,
+                headers: { 'RequestVerificationToken': getAntiForgeryToken() },
+                success: function (res) {
+                    // 表单 POST 返回重定向（HTTP 302），ajax 会跟随重定向
+                    // 这里直接显示成功 Toast 并跳转
+                    showSuccess('配置已更新，缓存已刷新');
+                    setTimeout(function () {
+                        window.location.href = '/SystemConfig';
+                    }, 800);
+                },
+                error: function (xhr) {
+                    $btn.prop('disabled', false).html(origHtml);
+                    var msg = '保存失败，请稍后重试';
+                    try {
+                        var r = JSON.parse(xhr.responseText);
+                        msg = r.message || msg;
+                    } catch (e) { }
+                    if (xhr.status === 401) {
+                        window.location.href = '/Account/Login';
+                        return;
+                    }
+                    if (xhr.status === 403) {
+                        msg = '没有操作权限';
+                    }
+                    showError(msg);
+                }
+            });
+        });
+    });
+</script>
+}

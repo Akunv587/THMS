@@ -1,0 +1,105 @@
+@model PagedResult<EquipmentIMS.Models.DTOs.MaintenancePlanListDto>
+@{
+    ViewData["Title"] = "保养计划管理";
+    var deviceArchiveId = ViewData["DeviceArchiveId"] as long?;
+    var cycleTypeList = ViewData["CycleTypeList"] as SelectList;
+}
+
+<div class="content-card">
+    <div class="content-header">
+        <h4><i class="bi bi-calendar-check me-2"></i>保养计划管理</h4>
+        <a asp-action="Create" class="btn btn-primary btn-sm"><i class="bi bi-plus-lg me-1"></i>新建计划</a>
+    </div>
+
+    <div class="search-bar mb-3">
+        <div class="d-flex gap-2 align-items-center flex-wrap">
+            <input id="searchDeviceArchiveId" type="text" class="form-control" style="max-width:250px"
+                   placeholder="输入序列号搜索设备..." value="@(deviceArchiveId.HasValue ? deviceArchiveId.ToString() : "")" />
+            <button type="button" class="btn btn-outline-secondary" onclick="doSearch()"><i class="bi bi-search me-1"></i>搜索</button>
+            <button type="button" class="btn btn-outline-secondary" onclick="doReset()"><i class="bi bi-arrow-repeat me-1"></i>重置</button>
+        </div>
+    </div>
+
+    <div class="table-responsive">
+        <table class="table data-table">
+            <thead>
+                <tr>
+                    <th>序列号</th>
+                    <th>设备名称</th>
+                    <th>客户</th>
+                    <th>计划名称</th>
+                    <th>周期</th>
+                    <th>下次保养</th>
+                    <th>状态</th>
+                    <th>创建时间</th>
+                    <th style="width:120px">操作</th>
+                </tr>
+            </thead>
+            <tbody>
+                @if (!Model.Items.Any())
+                {
+                    <tr><td colspan="9" class="text-center text-muted py-4">暂无数据</td></tr>
+                }
+                @foreach (var item in Model.Items)
+                {
+                    <tr class="@(item.NextDate <= DateTime.Today ? "table-warning" : "")">
+                        <td><span class="fw-medium">@item.SerialNo</span></td>
+                        <td>@item.ProductName</td>
+                        <td>@item.CustomerName</td>
+                        <td>@item.PlanName</td>
+                        <td>@item.CycleTypeName</td>
+                        <td>
+                            @item.NextDate.ToString("yyyy-MM-dd")
+                            @if (item.NextDate <= DateTime.Today)
+                            {<span class="badge bg-danger ms-1">已到期</span>}
+                        </td>
+                        <td>
+                            @if (item.IsActive)
+                            {<span class="badge bg-success">启用</span>}
+                            else
+                            {<span class="badge bg-secondary">停用</span>}
+                        </td>
+                        <td>@item.CreateTime.ToString("yyyy-MM-dd")</td>
+                        <td>
+                            <a asp-action="Edit" asp-route-id="@item.Id" class="btn btn-sm btn-outline-primary" title="编辑"><i class="bi bi-pencil"></i></a>
+                            <button type="button" class="btn btn-sm btn-outline-danger" title="删除"
+                                    onclick="confirmDelete(@item.Id, '@item.PlanName')"><i class="bi bi-trash"></i></button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+
+    @{
+        ViewData["Page"] = Model.Page;
+        ViewData["PageSize"] = Model.PageSize;
+        ViewData["TotalCount"] = Model.TotalCount;
+        @await Html.PartialAsync("_Pager")
+    }
+</div>
+
+<form id="deleteForm" method="post" asp-action="Delete" style="display:none">
+    @Html.AntiForgeryToken()
+    <input type="hidden" name="id" id="deleteId" />
+</form>
+
+<script>
+    function doSearch() {
+        var url = new URL(window.location.href);
+        url.searchParams.set('deviceArchiveId', document.getElementById('searchDeviceArchiveId').value);
+        url.searchParams.set('page', 1);
+        window.location.href = url.toString();
+    }
+
+    function doReset() {
+        window.location.href = '@Url.Action("Index")';
+    }
+
+    function confirmDelete(id, name) {
+        if (confirm('确定要删除保养计划「' + name + '」吗？')) {
+            document.getElementById('deleteId').value = id;
+            document.getElementById('deleteForm').submit();
+        }
+    }
+</script>

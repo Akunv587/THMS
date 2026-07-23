@@ -1,0 +1,134 @@
+@{
+    ViewData["Title"] = "维修报表";
+    var statBy = ViewData["StatBy"] as string ?? "status";
+    var startDate = ViewData["StartDate"] as string;
+    var endDate = ViewData["EndDate"] as string;
+    var statJson = ViewData["StatData"] as string;
+    var costJson = ViewData["CostAnalysis"] as string;
+    var warrantyRate = ViewData["WarrantyRate"] as decimal? ?? 0;
+    var partsJson = ViewData["PartsUsage"] as string;
+}
+
+<div class="content-card">
+    <div class="content-header">
+        <h4><i class="bi bi-tools me-2"></i>维修报表</h4>
+    </div>
+
+    <div class="search-bar mb-3">
+        <div class="d-flex gap-2 align-items-center flex-wrap">
+            <div class="input-group" style="max-width:170px"><span class="input-group-text">从</span><input id="startDate" type="date" class="form-control" value="@startDate"></div>
+            <div class="input-group" style="max-width:170px"><span class="input-group-text">到</span><input id="endDate" type="date" class="form-control" value="@endDate"></div>
+            <select id="statBy" class="form-select" style="max-width:130px">
+                <option value="status" selected="@(statBy == "status" ? "selected" : null)">按状态</option>
+                <option value="technician" selected="@(statBy == "technician" ? "selected" : null)">按技术员</option>
+                <option value="customer" selected="@(statBy == "customer" ? "selected" : null)">按客户</option>
+            </select>
+            <button type="button" class="btn btn-outline-secondary" onclick="doFilter()"><i class="bi bi-search"></i> 查询</button>
+            <div class="ms-auto d-flex gap-2">
+                <a href="javascript:syncExport()" class="btn btn-success btn-sm"><i class="bi bi-download me-1"></i>同步导出</a>
+                <a href="javascript:asyncExport('RepairStat')" class="btn btn-outline-success btn-sm"><i class="bi bi-cloud-download me-1"></i>异步导出统计</a>
+                <a href="javascript:asyncExport('PartsUsage')" class="btn btn-outline-success btn-sm"><i class="bi bi-cloud-download me-1"></i>异步导出配件</a>
+            </div>
+        </div>
+    </div>
+
+    <!-- 成本分析概览 -->
+    <div class="row mb-4" id="costOverview"></div>
+
+    <!-- 维修统计图 + 保修占比 -->
+    <div class="row mb-4">
+        <div class="col-md-8"><div class="card"><div class="card-body"><div id="statChart" style="height:350px"></div></div></div></div>
+        <div class="col-md-4"><div class="card"><div class="card-body"><div id="warrantyChart" style="height:350px"></div></div></div></div>
+    </div>
+
+    <!-- 配件使用统计 -->
+    <div class="row">
+        <div class="col-12">
+            <h5 class="mb-2">配件使用统计</h5>
+            <div class="table-responsive">
+                <table class="table data-table table-sm">
+                    <thead><tr><th>配件编码</th><th>配件名称</th><th class="text-end">使用次数</th><th class="text-end">使用数量</th><th class="text-end">总金额</th><th class="text-end">均价</th></tr></thead>
+                    <tbody id="partsBody"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+<script>
+    var statData = @Html.Raw(statJson ?? "[]");
+    var costData = @Html.Raw(costJson ?? "{}");
+    var warrantyRate = @warrantyRate;
+    var partsData = @Html.Raw(partsJson ?? "[]");
+
+    (function render(){
+        // 成本概览
+        document.getElementById('costOverview').innerHTML =
+            '<div class="col-md-3"><div class="card text-center"><div class="card-body"><h6>工单总数</h6><h3>' + costData.TotalOrders + '</h3></div></div></div>' +
+            '<div class="col-md-3"><div class="card text-center"><div class="card-body"><h6>维修总费用</h6><h3 class="text-primary">' + (costData.TotalRepairCost||0).toFixed(2) + '</h3></div></div></div>' +
+            '<div class="col-md-3"><div class="card text-center"><div class="card-body"><h6>配件总费用</h6><h3 class="text-warning">' + (costData.TotalPartsCost||0).toFixed(2) + '</h3></div></div></div>' +
+            '<div class="col-md-3"><div class="card text-center"><div class="card-body"><h6>保修占比</h6><h3 class="text-success">' + warrantyRate.toFixed(1) + '%</h3></div></div></div>';
+
+        // 维修统计图
+        var sc = echarts.init(document.getElementById('statChart'));
+        sc.setOption({
+            title: { text: '维修统计', left: 'center' },
+            tooltip: { trigger: 'axis' },
+            xAxis: { type: 'category', data: statData.map(s => s.GroupLabel), axisLabel: { rotate: 30 } },
+            yAxis: { type: 'value' },
+            series: [
+                { name: '工单数', type: 'bar', data: statData.map(s => s.OrderCount), itemStyle: { color: '#5470c6' } },
+                { name: '总费用', type: 'line', data: statData.map(s => s.TotalCost), yAxisIndex: 0, itemStyle: { color: '#ee6666' } }
+            ]
+        });
+
+        // 保修占比饼图
+        var wc = echarts.init(document.getElementById('warrantyChart'));
+        wc.setOption({
+            title: { text: '保修期内维修占比', left: 'center', textStyle: { fontSize: 14 } },
+            tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)' },
+            series: [{
+                type: 'pie', radius: '65%',
+                data: [
+                    { name: '保修期内', value: costData.WarrantyOrders },
+                    { name: '非保修', value: costData.TotalOrders - costData.WarrantyOrders }
+                ]
+            }]
+        });
+
+        // 配件使用表
+        var pRows = partsData.map(function(p){
+            return '<tr><td>' + p.ProductCode + '</td><td>' + p.ProductName + '</td><td class="text-end">' + p.UsageCount + '</td><td class="text-end">' + p.TotalQty + '</td><td class="text-end">' + p.TotalAmount.toFixed(2) + '</td><td class="text-end">' + p.AvgUnitPrice.toFixed(2) + '</td></tr>';
+        }).join('');
+        document.getElementById('partsBody').innerHTML = pRows || '<tr><td colspan="6" class="text-center py-3">暂无数据</td></tr>';
+    })();
+
+    function doFilter() {
+        var url = new URL(window.location.href);
+        url.searchParams.set('startDate', document.getElementById('startDate').value);
+        url.searchParams.set('endDate', document.getElementById('endDate').value);
+        url.searchParams.set('statBy', document.getElementById('statBy').value);
+        window.location.href = url.toString();
+    }
+
+    function syncExport() {
+        var url = '@Url.Action("ExportRepairStat")' +
+            '?startDate=' + document.getElementById('startDate').value +
+            '&endDate=' + document.getElementById('endDate').value +
+            '&statBy=' + document.getElementById('statBy').value;
+        window.open(url);
+    }
+
+    function asyncExport(reportType) {
+        fetch('@Url.Action("AsyncExport")', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'RequestVerificationToken': document.querySelector('input[name="__RequestVerificationToken"]')?.value },
+            body: new URLSearchParams({
+                reportType, startDate: document.getElementById('startDate').value,
+                endDate: document.getElementById('endDate').value,
+                param1: document.getElementById('statBy').value
+            })
+        }).then(r => r.json()).then(d => alert(d.message));
+    }
+</script>

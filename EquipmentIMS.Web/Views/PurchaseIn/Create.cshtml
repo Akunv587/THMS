@@ -1,0 +1,334 @@
+@model EquipmentIMS.Web.Models.PurchaseInViewModel
+@{
+    ViewData["Title"] = "新增采购入库";
+}
+
+<div class="content-card">
+    <div class="content-header">
+        <h4>@ViewData["Title"]</h4>
+        <a asp-action="Index" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i>返回</a>
+    </div>
+
+    <form id="purchaseInForm">
+        @* 扫码输入区 *@
+        <partial name="_BarcodeScanner" />
+
+        <div class="row g-3">
+            <div class="col-md-4">
+                <label class="form-label">选择采购订单 <span class="text-danger">*</span></label>
+                <select id="purchaseOrderSelect" class="form-select" style="width:100%">
+                    <option value="">请选择采购订单</option>
+                </select>
+                <div id="orderInfo" class="mt-2 small text-muted" style="display:none"></div>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">入库日期</label>
+                <input asp-for="InDate" type="date" class="form-control" />
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">备注</label>
+                <input asp-for="Remark" class="form-control" />
+            </div>
+        </div>
+
+        <div class="mt-4">
+            <h6 class="mb-2">入库明细</h6>
+            <div class="table-responsive">
+                <table class="table data-table" id="detailTable">
+                    <thead><tr>
+                        <th>设备编码</th><th>设备名称</th><th>规格</th><th>订单数量</th><th>已入库</th><th>剩余</th><th style="width:120px">入库数量</th><th>单价</th><th>金额</th>
+                    </tr></thead>
+                    <tbody id="detailBody">
+                        <tr id="emptyRow"><td colspan="9" class="text-center text-muted py-4">请先选择采购订单</td></tr>
+                    </tbody>
+                    <tfoot>
+                        <tr>
+                            <td colspan="7" class="text-end fw-bold">合计：</td>
+                            <td colspan="2" class="fw-bold text-danger" id="totalAmount">0.00</td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        </div>
+
+        <div class="mt-4">
+            <button type="button" id="btnSubmit" class="btn btn-primary" disabled>
+                <i class="bi bi-check2-circle me-1"></i>确认入库
+            </button>
+            <a asp-action="Index" class="btn btn-outline-secondary ms-2">取消</a>
+        </div>
+    </form>
+</div>
+
+<!-- 确认对话框 -->
+<div class="modal fade" id="confirmModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header"><h5 class="modal-title">确认入库</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+            <div class="modal-body" id="confirmBody"></div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" id="btnConfirm"><i class="bi bi-check-lg me-1"></i>确认入库</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        var selectedOrder = null;
+
+        // 初始化订单下拉
+        $(function () {
+            $('#purchaseOrderSelect').select2({
+                ajax: {
+                    url: '@Url.Action("GetApprovedOrdersForIn", "PurchaseIn")',
+                    dataType: 'json',
+                    delay: 300,
+                    processResults: function (res) {
+                        return {
+                            results: (res.data || []).map(function (item) {
+                                return { id: item.id, text: item.orderNo + ' - ' + item.supplierName, item: item };
+                            })
+                        };
+                    }
+                },
+                placeholder: '搜索订单号',
+                allowClear: true,
+                width: '100%'
+            }).on('select2:select', function (e) {
+                loadOrderDetails(e.params.data.item.id);
+            }).on('select2:clear', function () {
+                resetDetails();
+            });
+        });
+
+        // 条码扫描回调：处理扫码枪/手动输入结果
+        function onBarcodeScanned(product) {
+            if (!selectedOrder) {
+                showFeedback('请先选择采购订单再扫码', 'text-warning');
+                return;
+            }
+            addOrUpdateDetailRow(product);
+        }
+
+        function addOrUpdateDetailRow(product) {
+            // 检查是否已在明细表中
+            var $existing = $('#detailBody .detail-row').filter(function () {
+                return $(this).find('.in-qty').data('product-id') == product.id
+                    || $(this).find('td:first').text().trim() === product.code;
+            });
+
+            if ($existing.length > 0) {
+                // 已在表中 → 数量 +1
+                var $qty = $existing.find('.in-qty');
+                var max = parseInt($qty.attr('max')) || 9999;
+                var curVal = parseInt($qty.val()) || 0;
+                $qty.val(Math.min(curVal + 1, max)).trigger('input');
+                flashRow($existing);
+            } else {
+                // 不在表中 → 新增行
+                var html = '<tr class="detail-row" data-product-id="' + product.id + '">'
+                    + '<td>' + product.code + '</td>'
+                    + '<td>' + product.name + '</td>'
+                    + '<td>' + (product.spec || '') + '</td>'
+                    + '<td class="text-center text-muted">-</td>'
+                    + '<td class="text-center text-muted">-</td>'
+                    + '<td class="text-center text-success fw-bold">1</td>'
+                    + '<td><input type="number" class="form-control form-control-sm in-qty" value="1" min="1" max="9999" data-idx="-1" data-product-id="' + product.id + '" /></td>'
+                    + '<td class="text-end unit-price">' + (product.purchasePrice || 0).toFixed(2) + '</td>'
+                    + '<td class="text-end amount">' + ((product.purchasePrice || 0)).toFixed(2) + '</td>'
+                    + '</tr>';
+                $('#emptyRow').remove();
+                $('#detailBody').append(html);
+                $('#btnSubmit').prop('disabled', false);
+            }
+            calcTotal();
+        }
+
+        function flashRow($row) {
+            $row.css('background-color', '#d1fae5');
+            setTimeout(function () { $row.css('background-color', ''); }, 800);
+        }
+
+        function showFeedback(msg, cls) {
+            // 使用扫码组件中的反馈区域
+            var $fb = $('#scanFeedback');
+            if ($fb.length) {
+                $fb.removeClass('text-muted text-success text-danger text-warning').addClass(cls || 'text-muted').html(msg);
+            }
+        }
+
+        function loadOrderDetails(orderId) {
+            $.get('@Url.Action("GetById", "PurchaseOrder")/' + orderId, function (res) {
+                selectedOrder = res;
+                var html = '';
+                if (res.details && res.details.length > 0) {
+                    res.details.forEach(function (d, i) {
+                        var remaining = d.qty - d.receivedQty;
+                        if (remaining <= 0) return;
+                        html += '<tr class="detail-row">'
+                            + '<td>' + d.productCode + '</td>'
+                            + '<td>' + d.productName + '</td>'
+                            + '<td>' + (d.spec || '') + '</td>'
+                            + '<td class="text-center">' + d.qty + '</td>'
+                            + '<td class="text-center">' + d.receivedQty + '</td>'
+                            + '<td class="text-center text-warning fw-bold">' + remaining + '</td>'
+                            + '<td><input type="number" class="form-control form-control-sm in-qty" value="' + remaining + '" min="1" max="' + remaining + '" data-idx="' + i + '" /></td>'
+                            + '<td class="text-end unit-price">' + d.unitPrice.toFixed(2) + '</td>'
+                            + '<td class="text-end amount">0.00</td>'
+                            + '</tr>';
+                    });
+                }
+                if (!html) html = '<tr><td colspan="9" class="text-center text-muted py-3">该订单所有设备已全部入库</td></tr>';
+                $('#detailBody').html(html);
+                $('#orderInfo').html('<strong>' + res.orderNo + '</strong> | 供应商: ' + res.supplierName + ' | 仓库: ' + (res.warehouseName || '') + ' | 金额: ' + res.totalAmount.toFixed(2)).show();
+                $('#btnSubmit').prop('disabled', false);
+                calcTotal();
+            }).fail(function () { alert('加载订单详情失败'); });
+        }
+
+        function resetDetails() {
+            selectedOrder = null;
+            $('#detailBody').html('<tr id="emptyRow"><td colspan="9" class="text-center text-muted py-4">请先选择采购订单</td></tr>');
+            $('#orderInfo').hide();
+            $('#btnSubmit').prop('disabled', true);
+            $('#totalAmount').text('0.00');
+        }
+
+        function calcTotal() {
+            var total = 0;
+            $('#detailBody .detail-row').each(function () {
+                var qty = parseInt($(this).find('.in-qty').val()) || 0;
+                var price = parseFloat($(this).find('.unit-price').text()) || 0;
+                $(this).find('.amount').text((qty * price).toFixed(2));
+                total += qty * price;
+            });
+            $('#totalAmount').text(total.toFixed(2));
+        }
+
+        $(document).on('input', '.in-qty', function () {
+            var $row = $(this).closest('.detail-row');
+            var max = parseInt($(this).attr('max'));
+            var val = parseInt($(this).val()) || 0;
+            if (val < 0) { $(this).val(0); val = 0; }
+            if (val > max) { $(this).val(max); val = max; }
+            calcTotal();
+        });
+
+        $('#btnSubmit').click(function () {
+            if (!selectedOrder) { alert('请先选择采购订单'); return; }
+            var details = [];
+            var valid = true;
+            $('#detailBody .detail-row').each(function () {
+                var qty = parseInt($(this).find('.in-qty').val()) || 0;
+                if (qty <= 0) valid = false;
+                var idx = $(this).find('.in-qty').data('idx');
+                var unitPrice = parseFloat($(this).find('.unit-price').text()) || 0;
+                if (idx === -1) {
+                    // 扫码新增的行
+                    details.push({
+                        productId: $(this).find('.in-qty').data('product-id'),
+                        productCode: $(this).find('td:eq(0)').text().trim(),
+                        productName: $(this).find('td:eq(1)').text().trim(),
+                        spec: $(this).find('td:eq(2)').text().trim(),
+                        unit: '',
+                        orderQty: 0,
+                        receivedQty: 0,
+                        remainingQty: 0,
+                        inQty: qty,
+                        unitPrice: unitPrice,
+                        amount: qty * unitPrice
+                    });
+                } else {
+                    details.push({
+                        productId: selectedOrder.details[idx].productId,
+                        productCode: $(this).find('td:eq(0)').text(),
+                        productName: $(this).find('td:eq(1)').text(),
+                        spec: $(this).find('td:eq(2)').text(),
+                        unit: selectedOrder.details[idx].unit,
+                        orderQty: parseInt($(this).find('td:eq(3)').text()),
+                        receivedQty: parseInt($(this).find('td:eq(4)').text()),
+                        remainingQty: parseInt($(this).find('td:eq(5)').text()),
+                        inQty: qty,
+                        unitPrice: unitPrice,
+                        amount: qty * unitPrice
+                    });
+                }
+            });
+            if (!valid) { alert('请填写所有明细的入库数量'); return; }
+
+            var amount = parseFloat($('#totalAmount').text()) || 0;
+            var html = '<p><strong>采购订单：</strong>' + selectedOrder.orderNo + '</p>'
+                + '<p><strong>入库明细：</strong></p>'
+                + '<table class="table table-sm"><thead><tr><th>设备</th><th>数量</th></tr></thead><tbody>';
+            details.forEach(function (d) {
+                html += '<tr><td>' + d.productName + '</td><td>' + d.inQty + '</td></tr>';
+            });
+            html += '</tbody></table><p class="fw-bold text-danger">合计金额：' + amount.toFixed(2) + '</p>';
+            $('#confirmBody').html(html);
+            $('#confirmModal').modal('show');
+        });
+
+        $('#btnConfirm').click(function () {
+            $('#btnConfirm').prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-1"></span>入库中...');
+            var details = [];
+            $('#detailBody .detail-row').each(function () {
+                var idx = $(this).find('.in-qty').data('idx');
+                var qty = parseInt($(this).find('.in-qty').val()) || 0;
+                if (qty <= 0) return;
+                var unitPrice = parseFloat($(this).find('.unit-price').text()) || 0;
+                if (idx === -1) {
+                    // 扫码新增的行
+                    details.push({
+                        ProductId: $(this).find('.in-qty').data('product-id'),
+                        ProductCode: $(this).find('td:eq(0)').text().trim(),
+                        ProductName: $(this).find('td:eq(1)').text().trim(),
+                        Spec: $(this).find('td:eq(2)').text().trim(),
+                        Unit: '',
+                        OrderQty: 0,
+                        ReceivedQty: 0,
+                        RemainingQty: 0,
+                        InQty: qty,
+                        UnitPrice: unitPrice,
+                        Amount: qty * unitPrice
+                    });
+                } else {
+                    var d = selectedOrder.details[idx];
+                    details.push({
+                        ProductId: d.productId,
+                        ProductCode: d.productCode,
+                        ProductName: d.productName,
+                        Spec: d.spec,
+                        Unit: d.unit,
+                        OrderQty: d.qty,
+                        ReceivedQty: d.receivedQty,
+                        RemainingQty: d.qty - d.receivedQty,
+                        InQty: qty,
+                        UnitPrice: d.unitPrice,
+                        Amount: qty * d.unitPrice
+                    });
+                }
+            });
+
+            var token = $('input[name="__RequestVerificationToken"]').val();
+            $.ajax({
+                url: '@Url.Action("Create")',
+                type: 'POST',
+                data: JSON.stringify({
+                    PurchaseOrderId: selectedOrder.id,
+                    InDate: $('#InDate').val(),
+                    Remark: $('#Remark').val(),
+                    Details: details
+                }),
+                contentType: 'application/json; charset=utf-8',
+                headers: { 'RequestVerificationToken': token },
+                success: function (res) {
+                    if (res.success) { alert(res.message); location.href = '@Url.Action("Index")'; }
+                    else { alert(res.message); $('#btnConfirm').prop('disabled', false).html('<i class="bi bi-check-lg me-1"></i>确认入库'); }
+                },
+                error: function () { alert('操作失败'); $('#btnConfirm').prop('disabled', false).html('<i class="bi bi-check-lg me-1"></i>确认入库'); }
+            });
+        });
+    </script>
+}

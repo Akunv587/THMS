@@ -1,0 +1,142 @@
+@{
+    ViewData["Title"] = "销售报表";
+    var rankBy = ViewData["RankBy"] as string ?? "product";
+    var groupBy = ViewData["GroupBy"] as string ?? "month";
+    var startDate = ViewData["StartDate"] as string;
+    var endDate = ViewData["EndDate"] as string;
+    var rankingJson = ViewData["RankingData"] as string;
+    var trendJson = ViewData["TrendData"] as string;
+    var returnStatJson = ViewData["ReturnStat"] as string;
+}
+
+<div class="content-card">
+    <div class="content-header">
+        <h4><i class="bi bi-graph-up-arrow me-2"></i>销售报表</h4>
+    </div>
+
+    <div class="search-bar mb-3">
+        <div class="d-flex gap-2 align-items-center flex-wrap">
+            <div class="input-group" style="max-width:170px"><span class="input-group-text">从</span><input id="startDate" type="date" class="form-control" value="@startDate"></div>
+            <div class="input-group" style="max-width:170px"><span class="input-group-text">到</span><input id="endDate" type="date" class="form-control" value="@endDate"></div>
+            <select id="rankBy" class="form-select" style="max-width:140px">
+                <option value="product" selected="@(rankBy == "product" ? "selected" : null)">按产品</option>
+                <option value="customer" selected="@(rankBy == "customer" ? "selected" : null)">按客户</option>
+                <option value="salesman" selected="@(rankBy == "salesman" ? "selected" : null)">按销售员</option>
+            </select>
+            <select id="groupBy" class="form-select" style="max-width:120px">
+                <option value="month" selected="@(groupBy == "month" ? "selected" : null)">按月</option>
+                <option value="quarter" selected="@(groupBy == "quarter" ? "selected" : null)">按季</option>
+            </select>
+            <button type="button" class="btn btn-outline-secondary" onclick="doFilter()"><i class="bi bi-search"></i> 查询</button>
+            <div class="ms-auto d-flex gap-2">
+                <a href="javascript:syncExport()" class="btn btn-success btn-sm"><i class="bi bi-download me-1"></i>同步导出</a>
+                <a href="javascript:asyncExport('SaleRanking')" class="btn btn-outline-success btn-sm"><i class="bi bi-cloud-download me-1"></i>异步导出排行</a>
+            </div>
+        </div>
+    </div>
+
+    <!-- 销售趋势 -->
+    <div class="row mb-4">
+        <div class="col-12"><div class="card"><div class="card-body"><div id="trendChart" style="height:350px"></div></div></div></div>
+    </div>
+
+    <!-- 销售排行 + 退货统计 -->
+    <div class="row mb-4">
+        <div class="col-md-8">
+            <h5 class="mb-2">销售排行</h5>
+            <div class="table-responsive">
+                <table class="table data-table table-sm">
+                    <thead><tr><th class="text-center">排名</th><th id="rankColLabel">名称</th><th class="text-end">销售金额</th><th class="text-end">订单数</th></tr></thead>
+                    <tbody id="rankingBody"></tbody>
+                </table>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <h5 class="mb-2">退货统计</h5>
+            <div id="returnStatPanel"></div>
+            <div id="returnPieChart" style="height:250px;margin-top:10px"></div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+<script>
+    var rankingData = @Html.Raw(rankingJson ?? "[]");
+    var trendData = @Html.Raw(trendJson ?? "[]");
+    var returnStat = @Html.Raw(returnStatJson ?? "{}");
+
+    (function render(){
+        // 趋势图
+        var tc = echarts.init(document.getElementById('trendChart'));
+        tc.setOption({
+            title: { text: '销售趋势', left: 'center' },
+            tooltip: { trigger: 'axis' },
+            xAxis: { type: 'category', data: trendData.map(t => t.Period) },
+            yAxis: { type: 'value', name: '金额(元)' },
+            series: [{
+                name: '销售金额', type: 'line', smooth: true,
+                data: trendData.map(t => t.TotalAmount),
+                areaStyle: { color: 'rgba(75,192,192,0.2)' }
+            }]
+        });
+
+        // 排行表
+        var label = rankBy === 'product' ? '产品' : rankBy === 'customer' ? '客户' : '销售员';
+        document.getElementById('rankColLabel').textContent = label;
+        var rows = rankingData.map(function(r,i){
+            return '<tr><td class="text-center">' + r.Ranking + '</td><td>' + r.Name + '</td><td class="text-end">' + r.TotalAmount.toFixed(2) + '</td><td class="text-end">' + r.OrderCount + '</td></tr>';
+        }).join('');
+        document.getElementById('rankingBody').innerHTML = rows || '<tr><td colspan="4" class="text-center py-3">暂无数据</td></tr>';
+
+        // 退货统计面板
+        document.getElementById('returnStatPanel').innerHTML =
+            '<div class="list-group list-group-flush small">' +
+            '<div class="list-group-item d-flex justify-content-between"><span>退货次数</span><strong>' + returnStat.ReturnCount + '</strong></div>' +
+            '<div class="list-group-item d-flex justify-content-between"><span>退货金额</span><strong class="text-danger">' + (returnStat.ReturnAmount||0).toFixed(2) + '</strong></div>' +
+            '<div class="list-group-item d-flex justify-content-between"><span>退货率</span><strong>' + (returnStat.ReturnRate||0).toFixed(1) + '%</strong></div>' +
+            '</div>';
+
+        // 退货饼图
+        var rp = echarts.init(document.getElementById('returnPieChart'));
+        rp.setOption({
+            tooltip: { trigger: 'item' },
+            series: [{
+                type: 'pie', radius: '70%',
+                data: [
+                    { name: '正常销售', value: returnStat.SaleAmount - (returnStat.ReturnAmount||0) },
+                    { name: '退货', value: returnStat.ReturnAmount||0 }
+                ],
+                label: { formatter: '{b}\n{d}%' }
+            }]
+        });
+    })();
+
+    function doFilter() {
+        var url = new URL(window.location.href);
+        url.searchParams.set('startDate', document.getElementById('startDate').value);
+        url.searchParams.set('endDate', document.getElementById('endDate').value);
+        url.searchParams.set('rankBy', document.getElementById('rankBy').value);
+        url.searchParams.set('groupBy', document.getElementById('groupBy').value);
+        window.location.href = url.toString();
+    }
+
+    function syncExport() {
+        var url = '@Url.Action("ExportSaleRanking")' +
+            '?startDate=' + document.getElementById('startDate').value +
+            '&endDate=' + document.getElementById('endDate').value +
+            '&rankBy=' + document.getElementById('rankBy').value;
+        window.open(url);
+    }
+
+    function asyncExport(reportType) {
+        fetch('@Url.Action("AsyncExport")', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'RequestVerificationToken': document.querySelector('input[name="__RequestVerificationToken"]')?.value },
+            body: new URLSearchParams({
+                reportType, startDate: document.getElementById('startDate').value,
+                endDate: document.getElementById('endDate').value,
+                param1: document.getElementById('rankBy').value
+            })
+        }).then(r => r.json()).then(d => alert(d.message));
+    }
+</script>

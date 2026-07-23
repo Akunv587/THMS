@@ -1,0 +1,78 @@
+@model EquipmentIMS.Models.DTOs.SaleOutDto
+@{
+    ViewData["Title"] = $"出库单详情 - {Model.OutNo}";
+}
+
+<div class="content-card">
+    <div class="content-header d-flex justify-content-between align-items-center">
+        <h4><i class="bi bi-truck me-2"></i>出库单详情</h4>
+        <div>
+            <a asp-action="Print" asp-route-id="@Model.Id" class="btn btn-outline-secondary btn-sm"><i class="bi bi-printer me-1"></i>打印</a>
+            <a asp-action="Index" class="btn btn-outline-secondary btn-sm ms-1"><i class="bi bi-arrow-left me-1"></i>返回</a>
+        </div>
+    </div>
+
+    <div class="card-body">
+        <div class="row mb-4">
+            <div class="col-md-6">
+                <table class="table table-sm table-borderless">
+                    <tr><td class="text-muted" style="width:100px">出库单号</td><td class="fw-bold">@Model.OutNo</td></tr>
+                    <tr><td class="text-muted">销售订单</td><td>@Model.SaleOrderNo</td></tr>
+                    <tr><td class="text-muted">客户</td><td>@Model.CustomerName</td></tr>
+                    <tr><td class="text-muted">仓库</td><td>@Model.WarehouseName</td></tr>
+                </table>
+            </div>
+            <div class="col-md-6">
+                <table class="table table-sm table-borderless">
+                    <tr><td class="text-muted" style="width:100px">出库日期</td><td>@Model.OutTime.ToString("yyyy-MM-dd")</td></tr>
+                    <tr><td class="text-muted">总金额</td><td class="fw-bold text-danger">@Model.TotalAmount.ToString("N2")</td></tr>
+                    <tr><td class="text-muted">经办人</td><td>@Model.Operator</td></tr>
+                    <tr><td class="text-muted">创建时间</td><td>@Model.CreateTime.ToString("yyyy-MM-dd HH:mm:ss")</td></tr>
+                </table>
+            </div>
+        </div>
+
+        @if (!string.IsNullOrEmpty(Model.Remark))
+        {
+            <div class="alert alert-light mb-3"><strong>备注：</strong>@Model.Remark</div>
+        }
+
+        <h5 class="mb-3">出库明细</h5>
+        <table class="table data-table">
+            <thead><tr>
+                <th style="width:40px">#</th>
+                <th>设备编码</th>
+                <th>设备名称</th>
+                <th style="width:80px">数量</th>
+                <th style="width:100px">单价</th>
+                <th style="width:100px">金额</th>
+            </tr></thead>
+            <tbody>
+                @if (Model.Details.Count == 0)
+                {
+                    <tr><td colspan="6" class="text-center text-muted py-4">无明细</td></tr>
+                }
+                @for (var i = 0; i < Model.Details.Count; i++)
+                {
+                    var d = Model.Details[i];
+                    <tr>
+                        <td>@(i + 1)</td>
+                        <td>@d.ProductCode</td>
+                        <td>@d.ProductName</td>
+                        <td class="text-end">@d.Qty</td>
+                        <td class="text-end">@d.UnitPrice.ToString("N2")</td>
+                        <td class="text-end">@d.Amount.ToString("N2")</td>
+                    </tr>
+                }
+            </tbody>
+            <tfoot>
+                <tr class="table-light fw-bold">
+                    <td colspan="3">合计</td>
+                    <td class="text-end">@Model.Details.Sum(d => d.Qty)</td>
+                    <td></td>
+                    <td class="text-end">@Model.TotalAmount.ToString("N2")</td>
+                </tr>
+            </tfoot>
+        </table>
+    </div>
+</div>

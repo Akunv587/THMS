@@ -1,0 +1,268 @@
+@model EquipmentIMS.Web.Models.SaleOrderViewModel
+@{
+    ViewData["Title"] = "新增销售订单";
+}
+
+<div class="content-card">
+    <div class="content-header">
+        <h4>@ViewData["Title"]</h4>
+        <a asp-action="Index" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i>返回</a>
+    </div>
+
+    <form asp-action="Create" method="post" id="saleForm">
+        @Html.AntiForgeryToken()
+
+        <div class="row g-3">
+            <div class="col-md-6">
+                <label asp-for="CustomerId" class="form-label"></label>
+                <select asp-for="CustomerId" class="form-select select2-remote" id="CustomerId"
+                        data-url="@Url.Action("GetCustomersJson", "Customer")"
+                        data-placeholder="请选择客户" style="width:100%">
+                    <option value="">请选择客户</option>
+                </select>
+                <span asp-validation-for="CustomerId" class="text-danger small"></span>
+            </div>
+            <div class="col-md-6">
+                <label asp-for="OrderDate" class="form-label"></label>
+                <input asp-for="OrderDate" type="date" class="form-control" />
+                <span asp-validation-for="OrderDate" class="text-danger small"></span>
+            </div>
+            <div class="col-md-6">
+                <label asp-for="ExpectedDate" class="form-label"></label>
+                <input asp-for="ExpectedDate" type="date" class="form-control" />
+            </div>
+        </div>
+
+        <div class="row g-3 mt-1">
+            <div class="col-12">
+                <label asp-for="Remark" class="form-label"></label>
+                <textarea asp-for="Remark" class="form-control" rows="2"></textarea>
+            </div>
+        </div>
+
+        @* 信用额度提示 *@
+        <div class="alert alert-info mt-3 d-none" id="creditInfo">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <i class="bi bi-info-circle-fill me-1"></i>
+                    <span>信用额度: <strong id="creditLimit">-</strong></span>
+                    <span class="mx-3">已用额度: <strong id="creditUsed">-</strong></span>
+                    <span class="mx-3">本次金额: <strong id="creditCurrent">0.00</strong></span>
+                    <span class="mx-3">剩余额度: <strong id="creditRemaining">-</strong></span>
+                </div>
+                <span id="creditWarning" class="badge bg-danger d-none">信用额度不足</span>
+            </div>
+        </div>
+
+        @* 设备明细表格 *@
+        <div class="mt-4">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <h6 class="mb-0">设备明细</h6>
+                <button type="button" class="btn btn-sm btn-outline-primary" id="btnAddRow"><i class="bi bi-plus-lg me-1"></i>添加明细行</button>
+            </div>
+
+            <div class="table-responsive">
+                <table class="table data-table" id="detailTable">
+                    <thead><tr>
+                        <th style="width:25%">设备</th>
+                        <th style="width:15%">出库仓库</th>
+                        <th style="width:12%">数量</th>
+                        <th style="width:12%">单价</th>
+                        <th style="width:12%">金额</th>
+                        <th style="width:14%">备注</th>
+                        <th style="width:10%">操作</th>
+                    </tr></thead>
+                    <tbody id="detailBody">
+                    </tbody>
+                    <tfoot>
+                        <tr>
+                            <td colspan="4" class="text-end fw-bold">合计：</td>
+                            <td class="fw-bold text-danger" id="totalAmount">0.00</td>
+                            <td colspan="2"></td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+            <span id="detailError" class="text-danger small" style="display:none;">至少添加一条设备明细</span>
+            <span id="warehouseError" class="text-danger small" style="display:none;">每行必须选择出库仓库</span>
+        </div>
+
+        <div class="mt-4">
+            <button type="submit" class="btn btn-primary" id="btnSubmit"><i class="bi bi-check-lg me-1"></i>保存</button>
+            <a asp-action="Index" class="btn btn-outline-secondary ms-2">取消</a>
+        </div>
+    </form>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    <script>
+        var rowIndex = 0;
+
+        function addDetailRow() {
+            var html = '<tr class="detail-row">'
+                + '<td><select name="Details[' + rowIndex + '].ProductId" class="form-select select2-product" data-placeholder="搜索设备编码/名称" required><option value=""></option></select></td>'
+                + '<td><select name="Details[' + rowIndex + '].WarehouseId" class="form-select select2-warehouse" data-placeholder="选择仓库" required><option value=""></option></select></td>'
+                + '<td><input type="number" name="Details[' + rowIndex + '].Qty" class="form-control qty" value="1" min="1" required /></td>'
+                + '<td><input type="number" name="Details[' + rowIndex + '].UnitPrice" class="form-control unit-price" value="0" min="0" step="0.01" required /></td>'
+                + '<td><input type="number" name="Details[' + rowIndex + '].Amount" class="form-control amount" value="0" readonly /></td>'
+                + '<td><input type="text" name="Details[' + rowIndex + '].Remark" class="form-control" /></td>'
+                + '<td><button type="button" class="btn btn-sm btn-outline-danger btn-delete-row"><i class="bi bi-trash"></i></button></td>'
+                + '</tr>';
+            $('#detailBody').append(html);
+
+            var $row = $('#detailBody .detail-row').last();
+            initProductSelect2($row.find('.select2-product'));
+            initWarehouseSelect2($row.find('.select2-warehouse'));
+
+            rowIndex++;
+            $('#detailError').hide();
+        }
+
+        function initProductSelect2($select) {
+            $select.select2({
+                ajax: {
+                    url: '@Url.Action("GetProductsJson", "Product")',
+                    dataType: 'json',
+                    delay: 300,
+                    data: function (params) { return { keyword: params.term }; },
+                    processResults: function (res) {
+                        return { results: (res.data || []).map(function (item) { return { id: item.id, text: item.code + ' - ' + item.name + (item.spec ? ' (' + item.spec + ')' : '') }; }) };
+                    }
+                },
+                placeholder: '搜索设备编码/名称',
+                allowClear: true,
+                width: '100%'
+            }).on('select2:select', function (e) {
+                var productId = e.params.data.id;
+                var customerId = $('#CustomerId').val();
+                var $row = $(this).closest('.detail-row');
+                if (customerId && productId) {
+                    $.getJSON('@Url.Action("GetCustomerPrice")', { customerId: customerId, productId: productId }, function (res) {
+                        if (res.success && res.data > 0) {
+                            $row.find('.unit-price').val(res.data);
+                            calcRow($row);
+                        }
+                    });
+                }
+            });
+        }
+
+        function initWarehouseSelect2($select) {
+            $select.select2({
+                ajax: {
+                    url: '@Url.Action("GetWarehousesJson", "Warehouse")',
+                    dataType: 'json',
+                    delay: 200,
+                    data: function (params) { return { keyword: params.term }; },
+                    processResults: function (res) {
+                        return { results: (res.data || []).map(function (item) { return { id: item.id, text: item.name }; }) };
+                    }
+                },
+                placeholder: '选择仓库',
+                allowClear: true,
+                width: '100%'
+            });
+        }
+
+        function calcRow($row) {
+            var qty = parseFloat($row.find('.qty').val()) || 0;
+            var price = parseFloat($row.find('.unit-price').val()) || 0;
+            $row.find('.amount').val((qty * price).toFixed(2));
+            calcTotal();
+        }
+
+        function calcTotal() {
+            var total = 0;
+            $('#detailBody .detail-row').each(function () { total += parseFloat($(this).find('.amount').val()) || 0; });
+            $('#totalAmount').text(total.toFixed(2));
+            $('#creditCurrent').text(total.toFixed(2));
+            checkCredit();
+        }
+
+        function loadCustomerCredit(customerId) {
+            if (!customerId) {
+                $('#creditInfo').addClass('d-none');
+                return;
+            }
+            $.getJSON('@Url.Action("GetCustomerCredit")', { customerId: customerId }, function (res) {
+                if (res.success) {
+                    $('#creditLimit').text(parseFloat(res.data.creditLimit).toFixed(2));
+                    $('#creditUsed').text(parseFloat(res.data.usedCredit).toFixed(2));
+                    $('#creditRemaining').text(parseFloat(res.data.remaining).toFixed(2));
+                    $('#creditInfo').removeClass('d-none');
+                    checkCredit();
+                }
+            });
+        }
+
+        function checkCredit() {
+            var remaining = parseFloat($('#creditRemaining').text()) || 0;
+            var current = parseFloat($('#creditCurrent').text()) || 0;
+            if ($('#creditInfo').hasClass('d-none')) return;
+            if (current > remaining) {
+                $('#creditWarning').removeClass('d-none');
+                $('#btnSubmit').prop('disabled', true).attr('title', '信用额度不足，无法保存');
+            } else {
+                $('#creditWarning').addClass('d-none');
+                $('#btnSubmit').prop('disabled', false).removeAttr('title');
+            }
+        }
+
+        $(function () {
+            $('#btnAddRow').click(function () { addDetailRow(); });
+
+            $(document).on('input', '.qty,.unit-price', function () { calcRow($(this).closest('.detail-row')); });
+            $(document).on('click', '.btn-delete-row', function () {
+                $(this).closest('.detail-row').remove();
+                calcTotal();
+            });
+
+            // 客户选择联动
+            $('#CustomerId').on('select2:select', function (e) {
+                loadCustomerCredit(e.params.data.id);
+            }).on('select2:clear', function () {
+                $('#creditInfo').addClass('d-none');
+                $('#btnSubmit').prop('disabled', false);
+            });
+
+            // Select2 remote for customer
+            $('.select2-remote').each(function () {
+                var $el = $(this);
+                $el.select2({
+                    ajax: {
+                        url: $el.data('url'),
+                        dataType: 'json',
+                        delay: 300,
+                        data: function (params) { return { keyword: params.term }; },
+                        processResults: function (res) {
+                            return { results: (res.data || []).map(function (item) { return { id: item.id, text: item.name || item.code }; }) };
+                        }
+                    },
+                    placeholder: $el.data('placeholder') || '请选择',
+                    allowClear: true,
+                    width: '100%'
+                });
+            });
+
+            $('#saleForm').submit(function () {
+                if ($('#detailBody .detail-row').length === 0) {
+                    $('#detailError').show();
+                    return false;
+                }
+                var missingWarehouse = false;
+                $('#detailBody .detail-row').each(function () {
+                    if (!$(this).find('.select2-warehouse').val()) missingWarehouse = true;
+                });
+                if (missingWarehouse) {
+                    $('#warehouseError').show();
+                    return false;
+                }
+                return true;
+            });
+
+            // 初始添加一行
+            addDetailRow();
+        });
+    </script>
+}

@@ -1,0 +1,33 @@
+@model EquipmentIMS.Web.Models.DispatchViewModel
+@{
+    ViewData["Title"] = "派工 - " + Model.OrderNo;
+    var technicianList = ViewData["TechnicianList"] as SelectList;
+}
+
+<div class="content-card" style="max-width:500px">
+    <div class="content-header">
+        <h4><i class="bi bi-person-check me-2"></i>派工</h4>
+        <a asp-action="Details" asp-route-id="@Model.OrderId" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i>返回</a>
+    </div>
+
+    <div class="alert alert-info">
+        <strong>工单号：</strong>@Model.OrderNo
+    </div>
+
+    <form asp-action="Dispatch" method="post">
+        @Html.AntiForgeryToken()
+        <input type="hidden" asp-for="OrderId" />
+        <input type="hidden" asp-for="OrderNo" />
+
+        <div class="mb-3">
+            <label asp-for="TechnicianId" class="form-label fw-bold"></label>
+            <select asp-for="TechnicianId" class="form-select" asp-items="technicianList">
+                <option value="">-- 请选择技术员 --</option>
+            </select>
+            <span asp-validation-for="TechnicianId" class="text-danger small"></span>
+        </div>
+
+        <button type="submit" class="btn btn-primary"><i class="bi bi-send me-1"></i>确认派工</button>
+        <a asp-action="Details" asp-route-id="@Model.OrderId" class="btn btn-outline-secondary ms-2">取消</a>
+    </form>
+</div>

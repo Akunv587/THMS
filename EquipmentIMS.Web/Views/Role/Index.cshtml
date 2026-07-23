@@ -1,0 +1,59 @@
+@model List<EquipmentIMS.Models.DTOs.RoleListDto>
+@{
+    ViewData["Title"] = "角色管理";
+}
+
+<div class="content-card">
+    <div class="content-header">
+        <h4><i class="bi bi-shield me-2"></i>角色管理</h4>
+        <a asp-action="Create" class="btn btn-primary btn-sm"><i class="bi bi-plus-lg me-1"></i>新增角色</a>
+    </div>
+
+    @if (TempData["Message"] != null)
+    {
+        <div class="alert alert-success alert-dismissible fade show" role="alert">
+            @TempData["Message"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    }
+    @if (TempData["Error"] != null)
+    {
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            @TempData["Error"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    }
+
+    <div class="table-responsive">
+        <table class="table data-table">
+            <thead><tr>
+                <th>角色编码</th><th>角色名称</th><th>描述</th><th>用户数</th><th>权限数</th><th>创建时间</th><th style="width:200px">操作</th>
+            </tr></thead>
+            <tbody>
+                @if (!Model.Any())
+                {
+                    <tr><td colspan="7" class="text-center text-muted py-4">暂无数据</td></tr>
+                }
+                @foreach (var item in Model)
+                {
+                    <tr>
+                        <td><code>@item.RoleCode</code></td>
+                        <td>@item.RoleName</td>
+                        <td>@item.Description</td>
+                        <td>@item.UserCount</td>
+                        <td>@item.PermissionCount</td>
+                        <td>@item.CreateTime.ToString("yyyy-MM-dd")</td>
+                        <td>
+                            <a asp-action="Edit" asp-route-id="@item.Id" class="btn btn-sm btn-outline-primary" title="编辑"><i class="bi bi-pencil"></i></a>
+                            <a asp-action="AssignPermissions" asp-route-id="@item.Id" class="btn btn-sm btn-outline-info" title="分配权限"><i class="bi bi-lock"></i></a>
+                            <form asp-action="Delete" asp-route-id="@item.Id" method="post" class="d-inline" onsubmit="return confirm('确认删除该角色？')">
+                                @Html.AntiForgeryToken()
+                                <button type="submit" class="btn btn-sm btn-outline-danger" title="删除"><i class="bi bi-trash"></i></button>
+                            </form>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>

@@ -1,0 +1,216 @@
+@using EquipmentIMS.Models.Enums
+@model EquipmentIMS.Models.DTOs.SaleOrderDto
+@{
+    ViewData["Title"] = "销售订单详情";
+    var isManager = (bool)(ViewData["IsManager"] ?? false);
+    var status = (SaleOrderStatus)Model.Status;
+    var canSubmit = status == SaleOrderStatus.Draft;
+    var canApprove = isManager && status == SaleOrderStatus.PendingApproval;
+    var canCancel = status == SaleOrderStatus.Draft
+                 || status == SaleOrderStatus.PendingApproval;
+}
+
+<div class="content-card">
+    <div class="content-header">
+        <h4><i class="bi bi-cart-check me-2"></i>销售订单详情</h4>
+        <a asp-action="Index" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i>返回</a>
+    </div>
+    <div class="card-body">
+        @* 主表信息 *@
+        <div class="row g-4 mb-4">
+            <div class="col-md-8">
+                <table class="table table-bordered mb-0">
+                    <tr><td class="bg-light fw-bold" style="width:120px">订单号</td><td><strong>@Model.OrderNo</strong></td></tr>
+                    <tr><td class="bg-light fw-bold">状态</td><td>@{
+                        var statusClass = status switch
+                        {
+                            SaleOrderStatus.Draft => "bg-secondary",
+                            SaleOrderStatus.PendingApproval => "bg-warning text-dark",
+                            SaleOrderStatus.Approved => "bg-info",
+                            SaleOrderStatus.PartialShipped => "bg-primary",
+                            SaleOrderStatus.Shipped => "bg-success",
+                            SaleOrderStatus.Returned => "bg-dark",
+                            SaleOrderStatus.Cancelled => "bg-danger",
+                            _ => "bg-secondary"
+                        };
+                    }<span class="badge @statusClass">@Model.StatusName</span></td></tr>
+                    <tr><td class="bg-light fw-bold">客户</td><td>@Model.CustomerName</td></tr>
+                    <tr><td class="bg-light fw-bold">订单日期</td><td>@Model.OrderDate.ToString("yyyy-MM-dd")</td></tr>
+                    <tr><td class="bg-light fw-bold">预计交货</td><td>@(Model.ExpectedDate?.ToString("yyyy-MM-dd") ?? "-")</td></tr>
+                    <tr><td class="bg-light fw-bold">备注</td><td>@(Model.Remark ?? "-")</td></tr>
+                </table>
+            </div>
+            <div class="col-md-4">
+                <table class="table table-bordered mb-0">
+                    <tr><td class="bg-light fw-bold">总金额</td><td class="text-end"><strong class="text-danger fs-5">@Model.TotalAmount.ToString("N2")</strong></td></tr>
+                    <tr><td class="bg-light fw-bold">已出库</td><td class="text-end">@Model.ShippedAmount.ToString("N2")</td></tr>
+                    <tr><td class="bg-light fw-bold">创建人</td><td>@Model.CreateBy</td></tr>
+                    <tr><td class="bg-light fw-bold">创建时间</td><td>@Model.CreateTime.ToString("yyyy-MM-dd HH:mm")</td></tr>
+                    <tr><td class="bg-light fw-bold">审批人</td><td>@(Model.Approver ?? "-")</td></tr>
+                    <tr><td class="bg-light fw-bold">审批时间</td><td>@(Model.ApproveTime?.ToString("yyyy-MM-dd HH:mm") ?? "-")</td></tr>
+                </table>
+            </div>
+        </div>
+
+        @* 明细表格 *@
+        <h6 class="mb-2">设备明细</h6>
+        <div class="table-responsive mb-4">
+            <table class="table data-table">
+                <thead><tr>
+                    <th>#</th><th>设备编码</th><th>设备名称</th><th>规格</th><th>出库仓库</th><th>数量</th><th>单价</th><th>金额</th><th>已出库</th><th>备注</th>
+                </tr></thead>
+                <tbody>
+                    @for (var i = 0; i < Model.Details.Count; i++)
+                    {
+                        var d = Model.Details[i];
+                        <tr>
+                            <td>@(i + 1)</td>
+                            <td>@d.ProductCode</td>
+                            <td>@d.ProductName</td>
+                            <td>@d.Spec</td>
+                            <td>@d.WarehouseName</td>
+                            <td class="text-end">@d.Qty</td>
+                            <td class="text-end">@d.UnitPrice.ToString("N2")</td>
+                            <td class="text-end">@d.Amount.ToString("N2")</td>
+                            <td class="text-end">@d.ShippedQty</td>
+                            <td>@d.Remark</td>
+                        </tr>
+                    }
+                </tbody>
+                <tfoot>
+                    <tr>
+                        <td colspan="7" class="text-end fw-bold">合计</td>
+                        <td class="text-end fw-bold text-danger">@Model.TotalAmount.ToString("N2")</td>
+                        <td></td><td></td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+
+        @* 状态时间线 *@
+        <h6 class="mb-2">状态流转</h6>
+        <div class="timeline mb-4">
+            <div class="timeline-item">
+                <div class="timeline-marker bg-secondary"></div>
+                <div class="timeline-content">
+                    <small class="text-muted">@Model.CreateTime.ToString("yyyy-MM-dd HH:mm")</small>
+                    <div>@Model.CreateBy 创建订单（草稿）</div>
+                </div>
+            </div>
+            @if ((int)status >= (int)SaleOrderStatus.PendingApproval)
+            {
+                <div class="timeline-item">
+                    <div class="timeline-marker bg-warning"></div>
+                    <div class="timeline-content">
+                        <div>提交审批</div>
+                    </div>
+                </div>
+            }
+            @if ((int)status >= (int)SaleOrderStatus.Approved)
+            {
+                <div class="timeline-item">
+                    <div class="timeline-marker bg-info"></div>
+                    <div class="timeline-content">
+                        <small class="text-muted">@(Model.ApproveTime?.ToString("yyyy-MM-dd HH:mm") ?? "")</small>
+                        <div>@Model.Approver 审批通过</div>
+                    </div>
+                </div>
+            }
+            @if ((int)status >= (int)SaleOrderStatus.PartialShipped)
+            {
+                <div class="timeline-item">
+                    <div class="timeline-marker bg-primary"></div>
+                    <div class="timeline-content"><div>部分出库</div></div>
+                </div>
+            }
+            @if (status == SaleOrderStatus.Shipped)
+            {
+                <div class="timeline-item">
+                    <div class="timeline-marker bg-success"></div>
+                    <div class="timeline-content"><div>已出库</div></div>
+                </div>
+            }
+            @if (status == SaleOrderStatus.Returned)
+            {
+                <div class="timeline-item">
+                    <div class="timeline-marker bg-dark"></div>
+                    <div class="timeline-content"><div>已退货</div></div>
+                </div>
+            }
+            @if (status == SaleOrderStatus.Cancelled)
+            {
+                <div class="timeline-item">
+                    <div class="timeline-marker bg-danger"></div>
+                    <div class="timeline-content"><div>已取消</div></div>
+                </div>
+            }
+        </div>
+
+        @* 操作按钮 *@
+        @if (canSubmit || canApprove || canCancel)
+        {
+            <div class="card-footer">
+                <div class="d-flex gap-2">
+                    @if (canSubmit)
+                    {
+                        <button type="button" class="btn btn-warning" onclick="submitOrder()"><i class="bi bi-send me-1"></i>提交审批</button>
+                    }
+                    @if (canApprove)
+                    {
+                        <button type="button" class="btn btn-success" onclick="approveOrder()"><i class="bi bi-check-circle me-1"></i>审批通过</button>
+                        <button type="button" class="btn btn-danger" onclick="rejectOrder()"><i class="bi bi-x-circle me-1"></i>驳回</button>
+                    }
+                    @if (canCancel)
+                    {
+                        <button type="button" class="btn btn-outline-danger" onclick="cancelOrder()"><i class="bi bi-ban me-1"></i>取消订单</button>
+                    }
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+<style>
+.timeline { position: relative; padding-left: 24px; }
+.timeline::before { content: ''; position: absolute; left: 8px; top: 0; bottom: 0; width: 2px; background: #dee2e6; }
+.timeline-item { position: relative; margin-bottom: 16px; padding-left: 20px; }
+.timeline-marker { position: absolute; left: -20px; top: 4px; width: 12px; height: 12px; border-radius: 50%; }
+.timeline-content { font-size: 13px; }
+</style>
+
+@section Scripts {
+    <script>
+        function submitOrder() {
+            if (!confirm('确认提交审批？提交后将无法修改订单。')) return;
+            ajaxPost('@Url.Action("Submit")', { id: @Model.Id }, function () {
+                showSuccess('已提交审批');
+                setTimeout(function () { location.reload(); }, 500);
+            });
+        }
+
+        function approveOrder() {
+            if (!confirm('确认审批通过？')) return;
+            ajaxPost('@Url.Action("Approve")', { id: @Model.Id }, function () {
+                showSuccess('审批通过');
+                setTimeout(function () { location.reload(); }, 500);
+            });
+        }
+
+        function rejectOrder() {
+            var reason = prompt('请输入驳回原因：');
+            if (!reason || !reason.trim()) return;
+            ajaxPost('@Url.Action("Reject")', { id: @Model.Id, reason: reason }, function () {
+                showSuccess('已驳回');
+                setTimeout(function () { location.reload(); }, 500);
+            });
+        }
+
+        function cancelOrder() {
+            if (!confirm('确认取消此订单？')) return;
+            ajaxPost('@Url.Action("Cancel")', { id: @Model.Id }, function () {
+                showSuccess('已取消');
+                setTimeout(function () { location.reload(); }, 500);
+            });
+        }
+    </script>
+}

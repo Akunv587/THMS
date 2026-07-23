@@ -1,0 +1,50 @@
+@model EquipmentIMS.Web.Models.CategoryViewModel
+@{
+    ViewData["Title"] = Model.Id > 0 ? "编辑分类" : "新增分类";
+}
+
+<div class="content-card" style="max-width:560px">
+    <div class="content-header">
+        <h4>@ViewData["Title"]</h4>
+        <a asp-action="Index" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i>返回</a>
+    </div>
+
+    <form asp-action="@(Model.Id > 0 ? "Edit" : "Create")" method="post">
+        @Html.AntiForgeryToken()
+        <input type="hidden" asp-for="Id" />
+        <input type="hidden" asp-for="ParentId" />
+
+        <div class="mb-3">
+            <label asp-for="ParentId" class="form-label"></label>
+            @if (Model.ParentId.HasValue)
+            {
+                <input class="form-control" value="已选择上级分类" disabled />
+            }
+            else
+            {
+                <input class="form-control" value="顶级分类" disabled />
+            }
+        </div>
+        <div class="mb-3">
+            <label asp-for="Code" class="form-label"></label>
+            <input asp-for="Code" class="form-control" />
+            <span asp-validation-for="Code" class="text-danger small"></span>
+        </div>
+        <div class="mb-3">
+            <label asp-for="Name" class="form-label"></label>
+            <input asp-for="Name" class="form-control" />
+            <span asp-validation-for="Name" class="text-danger small"></span>
+        </div>
+        <div class="mb-3">
+            <label asp-for="SortOrder" class="form-label"></label>
+            <input asp-for="SortOrder" class="form-control" type="number" />
+        </div>
+
+        <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg me-1"></i>保存</button>
+        <a asp-action="Index" class="btn btn-outline-secondary ms-2">取消</a>
+    </form>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

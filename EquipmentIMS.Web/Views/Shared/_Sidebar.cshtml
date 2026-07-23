@@ -1,0 +1,55 @@
+@inject EquipmentIMS.BLL.Interfaces.ICurrentUserService CurrentUser
+@inject EquipmentIMS.BLL.Interfaces.IMenuService MenuService
+@{
+    var userId = CurrentUser.UserId;
+    var menus = userId > 0 ? await MenuService.GetMenusByUserAsync(userId) : new List<EquipmentIMS.Models.DTOs.MenuDto>();
+}
+
+<aside class="sidebar">
+    <div class="sidebar-header">
+        <i class="bi bi-box-seam"></i>
+        <span>设备库存管理</span>
+    </div>
+    <ul class="sidebar-menu">
+        @if (menus.Count > 0)
+        {
+            RenderMenuTree(menus);
+        }
+        else
+        {
+            <li class="text-center py-4 text-muted small">暂无菜单</li>
+        }
+    </ul>
+</aside>
+
+@{
+    void RenderMenuTree(List<EquipmentIMS.Models.DTOs.MenuDto> items)
+    {
+        foreach (var menu in items)
+        {
+            var hasChildren = menu.Children != null && menu.Children.Count > 0;
+            var icon = string.IsNullOrEmpty(menu.Icon) ? "bi-circle" : menu.Icon;
+            <li class="menu-item">
+                @if (hasChildren)
+                {
+                    <a href="#" class="menu-link has-children">
+                        <i class="bi @icon"></i>
+                        <span class="menu-text">@menu.PermissionName</span>
+                        <i class="bi bi-chevron-right menu-arrow"></i>
+                    </a>
+                    <ul class="submenu">
+                        @{ RenderMenuTree(menu.Children!); }
+                    </ul>
+                }
+                else
+                {
+                    var url = string.IsNullOrEmpty(menu.Url) ? "#" : menu.Url;
+                    <a href="@url" class="menu-link">
+                        <i class="bi @icon"></i>
+                        <span class="menu-text">@menu.PermissionName</span>
+                    </a>
+                }
+            </li>
+        }
+    }
+}

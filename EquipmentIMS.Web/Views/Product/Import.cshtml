@@ -1,0 +1,61 @@
+@model EquipmentIMS.Web.Models.ProductImportViewModel
+@{
+    ViewData["Title"] = "Excel导入设备";
+}
+
+<div class="content-card" style="max-width:560px">
+    <div class="content-header">
+        <h4><i class="bi bi-upload me-2"></i>Excel导入设备</h4>
+        <a asp-action="Index" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i>返回</a>
+    </div>
+
+    <form asp-action="Import" method="post" enctype="multipart/form-data">
+        @Html.AntiForgeryToken()
+
+        <div class="alert alert-info">
+            <strong>模板说明：</strong>
+            Excel 第一行为标题行，列顺序：编码、名称、分类、规格型号、品牌、单位、条码、采购价、销售价、最低库存
+            <a asp-action="DownloadTemplate" class="btn btn-sm btn-outline-info ms-3"><i class="bi bi-download me-1"></i>下载模板</a>
+        </div>
+
+        <div class="mb-3">
+            <label asp-for="File" class="form-label"></label>
+            <input asp-for="File" class="form-control" type="file" accept=".xlsx" />
+            <span asp-validation-for="File" class="text-danger small"></span>
+        </div>
+
+        <button type="submit" class="btn btn-primary"><i class="bi bi-upload me-1"></i>开始导入</button>
+        <a asp-action="Index" class="btn btn-outline-secondary ms-2">取消</a>
+    </form>
+
+    @if (ViewBag.ImportResult != null)
+    {
+        var result = ViewBag.ImportResult as EquipmentIMS.Models.DTOs.ImportResult;
+        <div class="mt-4">
+            <div class="alert @(result.FailCount == 0 ? "alert-success" : "alert-warning")">
+                <strong>导入完成：</strong>
+                总行数 <strong>@result.TotalCount</strong>，
+                成功 <strong>@result.SuccessCount</strong>，
+                失败 <strong>@result.FailCount</strong>
+            </div>
+            @if (result.FailCount > 0)
+            {
+                <table class="table table-sm table-bordered">
+                    <thead><tr><th>行号</th><th>编码</th><th>失败原因</th></tr></thead>
+                    <tbody>
+                        @foreach (var f in result.FailItems)
+                        {
+                            <tr class="text-danger">
+                                <td>@f.Row</td><td>@f.Code</td><td>@f.Reason</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </div>
+    }
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

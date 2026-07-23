@@ -1,0 +1,194 @@
+@model StockCheckDto
+@{
+    ViewData["Title"] = "录入实盘";
+}
+
+<div class="content-card">
+    <div class="content-header">
+        <h4><i class="bi bi-pencil-square me-2"></i>录入实盘</h4>
+        <div class="d-flex gap-2">
+            <button type="button" class="btn btn-primary btn-sm" onclick="confirmSubmit()" id="btnSubmit">
+                <i class="bi bi-send me-1"></i>提交审批
+            </button>
+            <a asp-action="Index" class="btn btn-outline-secondary btn-sm">返回列表</a>
+        </div>
+    </div>
+
+    @if (TempData["Success"] != null)
+    {
+        <div class="alert alert-success alert-dismissible fade show" role="alert">
+            @TempData["Success"]<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    }
+    @if (TempData["Error"] != null)
+    {
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            @TempData["Error"]<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    }
+
+    @* 盘点单信息 *@
+    <div class="row mb-3">
+        <div class="col-lg-12">
+            <div class="d-flex flex-wrap gap-3 p-3 bg-light rounded">
+                <div><strong>盘点单号：</strong>@Model.CheckNo</div>
+                <div><strong>仓库：</strong>@Model.WarehouseName</div>
+                <div><strong>日期：</strong>@Model.CheckDate.ToString("yyyy-MM-dd")</div>
+                <div><strong>状态：</strong>@StatusBadge(Model.Status, Model.StatusName)</div>
+                <div><strong>操作人：</strong>@(Model.Operator ?? "-")</div>
+                <div><strong>差异金额：</strong><span id="spanTotalDiff">@Model.TotalDiffAmount.ToString("F2")</span></div>
+                @if (!string.IsNullOrWhiteSpace(Model.Remark))
+                {
+                    <div class="w-100"><strong>备注：</strong>@Model.Remark</div>
+                }
+            </div>
+        </div>
+    </div>
+
+    @* 明细表格 *@
+    <form id="recordForm" method="post" asp-action="Record" asp-route-id="@Model.Id">
+        <div class="table-responsive" style="max-height:60vh;overflow-y:auto">
+            <table class="table data-table table-sm">
+                <thead class="sticky-top">
+                    <tr>
+                        <th style="width:40px">#</th>
+                        <th>设备编码</th>
+                        <th>设备名称</th>
+                        <th style="width:100px">系统数量</th>
+                        <th style="width:120px">实盘数量</th>
+                        <th style="width:100px">差异</th>
+                        <th>备注</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (!Model.Details.Any())
+                    {
+                        <tr><td colspan="7" class="text-center text-muted py-4">无盘点明细</td></tr>
+                    }
+                    @for (int i = 0; i < Model.Details.Count; i++)
+                    {
+                        var d = Model.Details[i];
+                        <tr>
+                            <td>@(i + 1)</td>
+                            <td>@d.ProductCode</td>
+                            <td>@d.ProductName</td>
+                            <td class="text-center">@d.SystemQty</td>
+                            <td>
+                                <input type="hidden" name="records[@i].DetailId" value="@d.Id" />
+                                <input type="number" class="form-control form-control-sm text-center actual-input"
+                                       name="records[@i].ActualQty"
+                                       data-system="@d.SystemQty" data-idx="@i"
+                                       value="@(d.ActualQty.HasValue ? d.ActualQty.Value.ToString() : d.SystemQty.ToString())"
+                                       min="0" style="min-width:80px" />
+                            </td>
+                            <td class="text-center fw-bold" id="diff_@i">
+                                @if (d.ActualQty.HasValue)
+                                {
+                                    var diff = d.ActualQty.Value - d.SystemQty;
+                                    if (diff > 0)
+                                    {
+                                        <span class="text-success">+@diff</span>
+                                    }
+                                    else if (diff < 0)
+                                    {
+                                        <span class="text-danger">@diff</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">0</span>
+                                    }
+                                }
+                                else
+                                {
+                                    <span class="text-muted">0</span>
+                                }
+                            </td>
+                            <td>
+                                <input type="text" class="form-control form-control-sm" name="records[@i].Remark" value="@d.Remark" placeholder="" />
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        <div class="d-flex gap-2 mt-3">
+            <button type="button" class="btn btn-primary" onclick="saveRecords()">
+                <i class="bi bi-save me-1"></i>保存实盘
+            </button>
+        </div>
+    </form>
+</div>
+
+@functions {
+    Microsoft.AspNetCore.Html.IHtmlContent StatusBadge(int st, string? name)
+    {
+        var cls = st switch
+        {
+            0 => "bg-light text-dark",
+            1 => "bg-info",
+            2 => "bg-warning text-dark",
+            3 => "bg-success",
+            4 => "bg-secondary",
+            _ => "bg-light text-dark"
+        };
+        return new Microsoft.AspNetCore.Html.HtmlString($"<span class=\"badge {cls}\">{name}</span>");
+    }
+}
+
+<script>
+    // 自动计算差异
+    document.querySelectorAll('.actual-input').forEach(input => {
+        input.addEventListener('input', function () {
+            var idx = this.dataset.idx;
+            var systemQty = parseInt(this.dataset.system) || 0;
+            var actualQty = parseInt(this.value) || 0;
+            var diff = actualQty - systemQty;
+            var el = document.getElementById('diff_' + idx);
+            if (diff > 0) {
+                el.innerHTML = '<span class="text-success">+' + diff + '</span>';
+            } else if (diff < 0) {
+                el.innerHTML = '<span class="text-danger">' + diff + '</span>';
+            } else {
+                el.innerHTML = '<span class="text-muted">0</span>';
+            }
+        });
+    });
+
+    function saveRecords() {
+        var form = document.getElementById('recordForm');
+        form.submit();
+    }
+
+    function confirmSubmit() {
+        var diffs = [];
+        document.querySelectorAll('.actual-input').forEach(function (input) {
+            var sys = parseInt(input.dataset.system) || 0;
+            var act = parseInt(input.value) || 0;
+            var diff = act - sys;
+            if (diff !== 0) {
+                var row = input.closest('tr');
+                var name = row.cells[2].textContent.trim();
+                diffs.push(name + ': ' + (diff > 0 ? '+' + diff : diff));
+            }
+        });
+
+        var msg = diffs.length > 0
+            ? '以下设备存在差异，确认提交审批？\n\n' + diffs.join('\n')
+            : '所有设备系统数量与实盘一致，确认提交审批？';
+
+        if (confirm(msg)) {
+            var antiForgeryToken = document.querySelector('input[name="__RequestVerificationToken"]').value;
+            var form = document.createElement('form');
+            form.method = 'post';
+            form.action = '@Url.Action("Submit", new { id = Model.Id })';
+            var tokenInput = document.createElement('input');
+            tokenInput.type = 'hidden';
+            tokenInput.name = '__RequestVerificationToken';
+            tokenInput.value = antiForgeryToken;
+            form.appendChild(tokenInput);
+            document.body.appendChild(form);
+            form.submit();
+        }
+    }
+</script>

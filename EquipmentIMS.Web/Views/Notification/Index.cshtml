@@ -1,0 +1,231 @@
+@model PagedResult<EquipmentIMS.Models.DTOs.NotificationDto>
+@{
+    ViewData["Title"] = "消息通知";
+    var typeFilter = ViewData["TypeFilter"] as string ?? "all";
+}
+
+<div class="content-card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-bell me-2"></i>消息通知</span>
+        <button class="btn btn-sm btn-outline-secondary" id="btn-mark-all-read"
+                onclick="markAllRead()">
+            <i class="bi bi-check-all me-1"></i>全部已读
+        </button>
+    </div>
+    <div class="card-body p-0">
+        @* 类型筛选标签 *@
+        <div class="px-3 pt-3 pb-0">
+            <ul class="nav nav-pills gap-1 mb-2">
+                <li class="nav-item">
+                    <a class="nav-link @(typeFilter == "all" ? "active" : "")"
+                       href="/Notification?page=1">
+                        <i class="bi bi-inbox me-1"></i>全部
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link @(typeFilter == "unread" ? "active" : "")"
+                       href="/Notification?page=1&type=unread">
+                        <i class="bi bi-envelope me-1"></i>未读
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link @(typeFilter == "approval" ? "active" : "")"
+                       href="/Notification?page=1&type=approval">
+                        <i class="bi bi-check-circle me-1"></i>审批提醒
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link @(typeFilter == "stock-alert" ? "active" : "")"
+                       href="/Notification?page=1&type=stock-alert">
+                        <i class="bi bi-exclamation-triangle me-1"></i>库存预警
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link @(typeFilter == "maintenance" ? "active" : "")"
+                       href="/Notification?page=1&type=maintenance">
+                        <i class="bi bi-tools me-1"></i>保养提醒
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link @(typeFilter == "system" ? "active" : "")"
+                       href="/Notification?page=1&type=system">
+                        <i class="bi bi-gear me-1"></i>系统通知
+                    </a>
+                </li>
+            </ul>
+        </div>
+
+        @* 通知列表 *@
+        @if (!Model.Items.Any())
+        {
+            <div class="text-center py-5 text-muted">
+                <i class="bi bi-bell" style="font-size:48px;color:#dee2e6;"></i>
+                <p class="mt-2">暂无消息通知</p>
+            </div>
+        }
+        else
+        {
+            <div class="notification-list">
+                @foreach (var item in Model.Items)
+                {
+                    var detailUrl = Url.Action("Details", new { id = item.Id });
+                    var refUrl = BuildRefUrl(item.RefType, item.RefId);
+
+                    <div class="notification-item @(!item.IsRead ? "unread" : "")"
+                         data-id="@item.Id"
+                         onclick="handleNotificationClick(@item.Id, '@item.IsRead.ToString().ToLower()', '@refUrl', '@detailUrl')">
+                        <div class="notification-icon @GetTypeClass(item.NotificationType)">
+                            <i class="bi @GetTypeIcon(item.NotificationType)"></i>
+                        </div>
+                        <div class="notification-body">
+                            <div class="notification-title">
+                                @item.Title
+                                <span class="badge @GetTypeBadgeClass(item.NotificationType) ms-1">
+                                    @item.NotificationTypeName
+                                </span>
+                                @if (!item.IsRead)
+                                {
+                                    <span class="unread-dot"></span>
+                                }
+                            </div>
+                            <div class="notification-content text-truncate-2 text-muted">
+                                @TruncateContent(item.Content, 100)
+                            </div>
+                            <div class="notification-time">
+                                @item.CreateTime.ToString("MM-dd HH:mm")
+                                @if (item.RefType != null)
+                                {
+                                    <span class="text-primary small">· 点击查看详情</span>
+                                }
+                            </div>
+                        </div>
+                        <div class="d-flex align-items-center ms-2">
+                            @if (!item.IsRead)
+                            {
+                                <span class="badge bg-primary rounded-pill" style="font-size:10px;">未读</span>
+                            }
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+
+        @* 分页 *@
+        @if (Model.TotalPages > 1)
+        {
+            ViewData["Page"] = Model.Page;
+            ViewData["PageSize"] = Model.PageSize;
+            ViewData["TotalCount"] = Model.TotalCount;
+            @await Html.PartialAsync("_Pager")
+        }
+    </div>
+</div>
+
+@functions {
+    /// <summary>截断内容到指定字符数，超出追加 "..."</summary>
+    static string TruncateContent(string? content, int maxLen)
+    {
+        if (string.IsNullOrEmpty(content)) return string.Empty;
+        if (content.Length <= maxLen) return content;
+        return content[..maxLen] + "...";
+    }
+
+    /// <summary>根据 RefType + RefId 生成关联业务 URL（null 表示无关联）</summary>
+    static string? BuildRefUrl(string? refType, long? refId)
+    {
+        if (string.IsNullOrEmpty(refType) || refId == null) return null;
+        return refType switch
+        {
+            "PurchaseOrder" => $"/PurchaseOrder/Details/{refId}",
+            "PurchaseIn" => $"/PurchaseIn/Details/{refId}",
+            "PurchaseReturn" => $"/PurchaseReturn/Details/{refId}",
+            "SaleOrder" => $"/SaleOrder/Details/{refId}",
+            "SaleOut" => $"/SaleOut/Details/{refId}",
+            "SaleReturn" => $"/SaleReturn/Details/{refId}",
+            "RepairOrder" => $"/RepairOrder/Details/{refId}",
+            "MaintenancePlan" => $"/MaintenancePlan/Details/{refId}",
+            "StockCheck" => $"/StockCheck/Details/{refId}",
+            "StockTransfer" => $"/StockTransfer/Details/{refId}",
+            "DeviceArchive" => $"/DeviceArchive/Details/{refId}",
+            _ => null
+        };
+    }
+
+    static string GetTypeClass(int type) => type switch
+    {
+        1 => "icon-approval",
+        2 => "icon-warning",
+        3 => "icon-maintenance",
+        4 => "icon-system",
+        _ => "icon-system"
+    };
+
+    static string GetTypeIcon(int type) => type switch
+    {
+        1 => "bi-check-circle",
+        2 => "bi-exclamation-triangle",
+        3 => "bi-tools",
+        4 => "bi-gear",
+        _ => "bi-bell"
+    };
+
+    static string GetTypeBadgeClass(int type) => type switch
+    {
+        1 => "bg-primary",
+        2 => "bg-warning text-dark",
+        3 => "bg-info",
+        4 => "bg-secondary",
+        _ => "bg-secondary"
+    };
+}
+
+@section Scripts {
+<script>
+    // 处理通知项点击：优先跳转关联业务，否则跳转详情页
+    function handleNotificationClick(id, isRead, refUrl, detailUrl) {
+        // 未读通知先标记已读（静默）
+        if (isRead === 'false') {
+            $.post('/Notification/MarkAsRead', { id: id },
+                null, 'json'
+            ).always(function () {
+                updateUnreadBadge();
+            });
+        }
+        // 跳转：有业务关联 → 业务页，否则 → 通知详情
+        if (refUrl) {
+            window.location.href = refUrl;
+        } else {
+            window.location.href = detailUrl;
+        }
+    }
+
+    // 全部已读
+    function markAllRead() {
+        if (!confirm('确认将所有通知标记为已读？')) return;
+        $.ajax({
+            url: '/Notification/MarkAllRead',
+            type: 'POST',
+            headers: { 'RequestVerificationToken': getAntiForgeryToken() },
+            success: function (res) {
+                if (res.success) { location.reload(); }
+            }
+        });
+    }
+
+    // 更新未读角标（复用 site.js 中的全局函数）
+    function updateUnreadBadge() {
+        if (typeof window.updateBadgeFromServer === 'function') {
+            window.updateBadgeFromServer();
+        } else {
+            $.get('/Notification/GetUnreadCount', function (res) {
+                if (res.success) {
+                    var c = res.data;
+                    var b = $('#notificationBadge');
+                    if (c > 0) { b.text(c > 99 ? '99+' : c).show(); }
+                    else { b.hide(); }
+                }
+            });
+        }
+    }
+</script>
+}

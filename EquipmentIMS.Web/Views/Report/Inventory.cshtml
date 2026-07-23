@@ -1,0 +1,122 @@
+@{
+    ViewData["Title"] = "库存报表";
+    var warehouseId = ViewData["WarehouseId"] as long?;
+    var summaryData = ViewData["SummaryData"] as List<EquipmentIMS.Models.DTOs.Reports.InventoryReportDto>;
+    var fundJson = ViewData["FundAnalysis"] as string;
+    var warnings = ViewData["Warnings"] as List<EquipmentIMS.Models.DTOs.Reports.StockWarningDto>;
+    var whList = ViewData["WarehouseList"] as List<EquipmentIMS.Models.DTOs.WarehouseDto>;
+}
+
+<div class="content-card">
+    <div class="content-header">
+        <h4><i class="bi bi-box-seam me-2"></i>库存报表</h4>
+    </div>
+
+    <div class="search-bar mb-3">
+        <div class="d-flex gap-2 align-items-center flex-wrap">
+            <select id="filterWarehouse" class="form-select" style="max-width:180px" onchange="doFilter()">
+                <option value="">全部仓库</option>
+                @if (whList != null) {
+                    foreach (var w in whList) { <option value="@w.Id" selected="@(warehouseId == w.Id ? "selected" : null)">@w.Name</option> }
+                }
+            </select>
+            <button type="button" class="btn btn-outline-secondary" onclick="doFilter()"><i class="bi bi-search"></i> 查询</button>
+            <div class="ms-auto d-flex gap-2">
+                <a href="javascript:syncExport('ExportInventorySummary')" class="btn btn-success btn-sm"><i class="bi bi-download me-1"></i>同步导出</a>
+                <a href="javascript:asyncExport('InventorySummary')" class="btn btn-outline-success btn-sm"><i class="bi bi-cloud-download me-1"></i>异步导出</a>
+            </div>
+        </div>
+    </div>
+
+    <!-- 资金占用分析图表 -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card"><div class="card-body"><div id="fundChart" style="height:350px"></div></div></div>
+        </div>
+    </div>
+
+    <!-- 库存汇总表 -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <h5 class="mb-2">库存汇总</h5>
+            <div class="table-responsive">
+                <table class="table data-table table-sm">
+                    <thead><tr>
+                        <th>产品编码</th><th>产品名称</th><th>规格</th><th>仓库</th>
+                        <th class="text-end">库存数量</th><th class="text-end">可用数量</th><th class="text-end">安全库存</th>
+                        <th class="text-end">库存价值</th><th>预警</th>
+                    </tr></thead>
+                    <tbody>
+                        @if (summaryData == null || !summaryData.Any()) { <tr><td colspan="9" class="text-center py-3">暂无数据</td></tr> }
+                        else { foreach (var item in summaryData) {
+                        <tr class="@(item.IsWarning ? "table-danger" : "")">
+                            <td>@item.ProductCode</td><td>@item.ProductName</td><td>@item.Spec</td><td>@item.WarehouseName</td>
+                            <td class="text-end">@item.Quantity</td><td class="text-end">@item.AvailableQty</td><td class="text-end">@item.MinStock</td>
+                            <td class="text-end">@item.TotalValue.ToString("N2")</td>
+                            <td>@(item.IsWarning ? Html.Raw("<span class='badge bg-danger'>预警</span>") : Html.Raw("<span class='badge bg-success'>正常</span>"))</td>
+                        </tr> } }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- 库存预警 -->
+    <div class="row">
+        <div class="col-12">
+            <h5 class="mb-2">库存预警清单</h5>
+            <div class="table-responsive">
+                <table class="table data-table table-sm">
+                    <thead><tr>
+                        <th>产品编码</th><th>产品名称</th><th>仓库</th><th class="text-end">当前库存</th><th class="text-end">安全库存</th><th class="text-end">缺口</th><th>等级</th>
+                    </tr></thead>
+                    <tbody>
+                        @if (warnings == null || !warnings.Any()) { <tr><td colspan="7" class="text-center py-3">暂无预警</td></tr> }
+                        else { foreach (var w in warnings) {
+                        <tr>
+                            <td>@w.ProductCode</td><td>@w.ProductName</td><td>@w.WarehouseName</td>
+                            <td class="text-end">@w.CurrentQty</td><td class="text-end">@w.MinStock</td><td class="text-end fw-bold text-danger">@w.Gaps</td>
+                            <td><span class="badge @(w.AlertLevel == "严重不足" ? "bg-danger" : "bg-warning")">@w.AlertLevel</span></td>
+                        </tr> } }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+<script>
+    var fundData = @Html.Raw(fundJson ?? "[]");
+    (function(){
+        var chart = echarts.init(document.getElementById('fundChart'));
+        chart.setOption({
+            title: { text: '仓库资金占用分析', left: 'center' },
+            tooltip: { trigger: 'item', formatter: '{b}: {c} 元 ({d}%)' },
+            series: [{
+                type: 'pie', radius: ['40%', '70%'], label: { formatter: '{b}\n{d}%' },
+                data: fundData.map(f => ({ name: f.GroupName, value: f.StockValue }))
+            }]
+        });
+    })();
+
+    function doFilter() {
+        var url = new URL(window.location.href);
+        var wh = document.getElementById('filterWarehouse').value;
+        if (wh) url.searchParams.set('warehouseId', wh); else url.searchParams.delete('warehouseId');
+        window.location.href = url.toString();
+    }
+
+    function syncExport(action) {
+        var wh = document.getElementById('filterWarehouse').value;
+        window.open('@Url.Action("ExportInventorySummary")?warehouseId=' + (wh || ''));
+    }
+
+    function asyncExport(reportType) {
+        fetch('@Url.Action("AsyncExport")', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'RequestVerificationToken': document.querySelector('input[name="__RequestVerificationToken"]')?.value },
+            body: new URLSearchParams({ reportType, startDate: '@DateTime.Today.AddMonths(-1).ToString("yyyy-MM-dd")', endDate: '@DateTime.Today.ToString("yyyy-MM-dd")' })
+        }).then(r => r.json()).then(d => alert(d.message));
+    }
+</script>

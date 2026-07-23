@@ -1,0 +1,180 @@
+@* 搜索栏区域参数通过 ViewData["SearchConfig"] 传入 (List<SearchField>) *@
+@* 表格列定义通过 Model 传入为 IEnumerabe<dynamic> 或自定义类型 *@
+@* ViewData["ShowSearch"] bool, ViewData["ShowActionBar"] bool, ViewData["Title"] string *@
+@model IEnumerable<object>?
+@{
+    var title = ViewData["Title"] as string ?? "数据列表";
+    var showSearch = ViewData["ShowSearch"] as bool? ?? true;
+    var showActionBar = ViewData["ShowActionBar"] as bool? ?? true;
+    var columns = ViewData["Columns"] as List<DataColumn> ?? new List<DataColumn>();
+    var searchConfig = ViewData["SearchConfig"] as List<SearchField> ?? new List<SearchField>();
+    var hasData = Model != null && Model.Any();
+}
+
+<div class="content-card">
+    <div class="card-header">@title</div>
+
+    <div class="card-body">
+        @* 搜索栏 *@
+        @if (showSearch && searchConfig.Count > 0)
+        {
+            <div class="search-bar mb-4">
+                @foreach (var field in searchConfig)
+                {
+                    <div class="form-group">
+                        <label>@field.Label</label>
+                        @if (field.Options != null && field.Options.Count > 0)
+                        {
+                            <select class="form-select" name="@field.Name">
+                                <option value="">全部</option>
+                                @foreach (var opt in field.Options)
+                                {
+                                    <option value="@opt.Value">@opt.Text</option>
+                                }
+                            </select>
+                        }
+                        else
+                        {
+                            <input type="@field.InputType" class="form-control" name="@field.Name" placeholder="@field.Placeholder" />
+                        }
+                    </div>
+                }
+                <button type="button" class="btn btn-primary btn-sm" onclick="doSearch()">
+                    <i class="bi bi-search me-1"></i>搜索
+                </button>
+                <button type="button" class="btn btn-outline-secondary btn-sm" onclick="resetSearch()">
+                    <i class="bi bi-arrow-repeat me-1"></i>重置
+                </button>
+            </div>
+        }
+
+        @* 操作按钮区 *@
+        @if (showActionBar)
+        {
+            <div class="action-bar">
+                <div class="d-flex gap-2">
+                    @if (ViewData["ActionButtons"] is IHtmlContent actionButtons)
+                    {
+                        @actionButtons
+                    }
+                </div>
+                <div>
+                    @if (ViewData["ExtraButtons"] is IHtmlContent extraButtons)
+                    {
+                        @extraButtons
+                    }
+                </div>
+            </div>
+        }
+
+        @* 表格 *@
+        <table class="data-table">
+            <thead>
+                <tr>
+                    @foreach (var col in columns)
+                    {
+                        <th class="@(col.Sortable ? "sortable" : "")" style="@(col.Width != null ? $"width:{col.Width}" : "")">@col.Title</th>
+                    }
+                </tr>
+            </thead>
+            <tbody>
+                @if (hasData)
+                {
+                    var rowIndex = 0;
+                    foreach (var item in Model!)
+                    {
+                        <tr>
+                            @foreach (var col in columns)
+                            {
+                                <td>
+                                    @if (col.Template != null)
+                                    {
+                                        @col.Template(item, rowIndex)
+                                    }
+                                    else if (!string.IsNullOrEmpty(col.PropertyName))
+                                    {
+                                        @GetPropertyValue(item, col.PropertyName)
+                                    }
+                                </td>
+                            }
+                        </tr>
+                        rowIndex++;
+                    }
+                }
+                else
+                {
+                    <tr class="empty-row">
+                        <td colspan="@(columns.Count > 0 ? columns.Count : 1)">
+                            <i class="bi bi-inbox"></i>
+                            暂无数据
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+
+    @* 分页 *@
+    @if (ViewData["RenderPager"] as bool? ?? true)
+    {
+        <div class="card-footer">
+            <partial name="_Pager" />
+        </div>
+    }
+</div>
+
+@functions {
+    public class SearchField
+    {
+        public string Name { get; set; } = "";
+        public string Label { get; set; } = "";
+        public string InputType { get; set; } = "text";
+        public string Placeholder { get; set; } = "";
+        public List<SelectOption>? Options { get; set; }
+    }
+
+    public class SelectOption
+    {
+        public string Value { get; set; } = "";
+        public string Text { get; set; } = "";
+    }
+
+    public class DataColumn
+    {
+        public string Title { get; set; } = "";
+        public string? PropertyName { get; set; }
+        public string? Width { get; set; }
+        public bool Sortable { get; set; }
+        public Func<object, int, object?>? Template { get; set; }
+    }
+
+    object? GetPropertyValue(object item, string propertyName)
+    {
+        if (item is IDictionary<string, object> dict)
+            return dict.TryGetValue(propertyName, out var val) ? val?.ToString() : "";
+        var prop = item.GetType().GetProperty(propertyName);
+        return prop?.GetValue(item)?.ToString();
+    }
+}
+
+<script>
+    function doSearch() {
+        var url = new URL(window.location.href);
+        document.querySelectorAll('.search-bar [name]').forEach(function (el) {
+            if (el.value) url.searchParams.set(el.name, el.value);
+            else url.searchParams.delete(el.name);
+        });
+        url.searchParams.set('page', 1);
+        window.location.href = url.toString();
+    }
+
+    function resetSearch() {
+        var url = new URL(window.location.href);
+        document.querySelectorAll('.search-bar [name]').forEach(function (el) {
+            url.searchParams.delete(el.name);
+            el.value = '';
+        });
+        url.searchParams.set('page', 1);
+        window.location.href = url.toString();
+    }
+</script>

@@ -1,0 +1,195 @@
+@model StockCheckDto
+@{
+    ViewData["Title"] = "盘点详情";
+    var isManager = ViewData["IsManager"] as bool? ?? false;
+}
+
+<div class="content-card">
+    <div class="content-header">
+        <h4><i class="bi bi-clipboard-data me-2"></i>盘点详情</h4>
+        <div class="d-flex gap-2">
+            @if (Model.Status == 2 && isManager)
+            {
+                <form method="post" asp-action="Approve" asp-route-id="@Model.Id">
+                    <button type="submit" class="btn btn-success btn-sm" onclick="return confirm('确认审批通过？系统将自动调整库存。')">
+                        <i class="bi bi-check-circle me-1"></i>审批通过
+                    </button>
+                </form>
+            }
+            @if (Model.Status == 0 || Model.Status == 1)
+            {
+                <a asp-action="Record" asp-route-id="@Model.Id" class="btn btn-primary btn-sm">
+                    <i class="bi bi-pencil-square me-1"></i>录入实盘
+                </a>
+            }
+            <a asp-action="Index" class="btn btn-outline-secondary btn-sm">返回列表</a>
+        </div>
+    </div>
+
+    @if (TempData["Success"] != null)
+    {
+        <div class="alert alert-success alert-dismissible fade show" role="alert">
+            @TempData["Success"]<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    }
+    @if (TempData["Error"] != null)
+    {
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            @TempData["Error"]<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    }
+
+    @* 基本信息卡片 *@
+    <div class="row mb-3">
+        <div class="col-lg-12">
+            <div class="d-flex flex-wrap gap-3 p-3 bg-light rounded">
+                <div><strong>盘点单号：</strong>@Model.CheckNo</div>
+                <div><strong>仓库：</strong>@Model.WarehouseName</div>
+                <div><strong>盘点日期：</strong>@Model.CheckDate.ToString("yyyy-MM-dd")</div>
+                <div><strong>状态：</strong>@StatusBadge(Model.Status, Model.StatusName)</div>
+                <div><strong>操作人：</strong>@(Model.Operator ?? "-")</div>
+                <div><strong>差异金额：</strong>@Model.TotalDiffAmount.ToString("F2")</div>
+                @if (Model.Approver != null)
+                {
+                    <div><strong>审批人：</strong>@Model.Approver</div>
+                    <div><strong>审批时间：</strong>@(Model.ApproveTime?.ToString("yyyy-MM-dd HH:mm") ?? "-")</div>
+                }
+                @if (!string.IsNullOrWhiteSpace(Model.Remark))
+                {
+                    <div class="w-100"><strong>备注：</strong>@Model.Remark</div>
+                }
+            </div>
+        </div>
+    </div>
+
+    @* 差异统计卡片 *@
+    @{
+        var gainCount = Model.Details.Count(d => d.DiffQty > 0);
+        var lossCount = Model.Details.Count(d => d.DiffQty < 0);
+        var equalCount = Model.Details.Count(d => d.DiffQty == 0);
+    }
+    <div class="row mb-3">
+        <div class="col-md-4">
+            <div class="card border-success">
+                <div class="card-body text-center">
+                    <h5 class="text-success">@gainCount</h5>
+                    <small class="text-muted">盘盈项数</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card border-danger">
+                <div class="card-body text-center">
+                    <h5 class="text-danger">@lossCount</h5>
+                    <small class="text-muted">盘亏项数</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card border-secondary">
+                <div class="card-body text-center">
+                    <h5 class="text-secondary">@equalCount</h5>
+                    <small class="text-muted">无差异项数</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @* 明细表格 *@
+    <div class="table-responsive">
+        <table class="table data-table">
+            <thead>
+                <tr>
+                    <th>设备编码</th>
+                    <th>设备名称</th>
+                    <th>系统数量</th>
+                    <th>实盘数量</th>
+                    <th>差异</th>
+                    <th>单价</th>
+                    <th>差异金额</th>
+                    <th>备注</th>
+                </tr>
+            </thead>
+            <tbody>
+                @if (!Model.Details.Any())
+                {
+                    <tr><td colspan="8" class="text-center text-muted py-4">无盘点明细</td></tr>
+                }
+                @foreach (var d in Model.Details)
+                {
+                    <tr class="@(d.DiffQty != 0 ? "table-active" : "")">
+                        <td>@d.ProductCode</td>
+                        <td>@d.ProductName</td>
+                        <td class="text-center">@d.SystemQty</td>
+                        <td class="text-center">@(d.ActualQty?.ToString() ?? "-")</td>
+                        <td class="text-center fw-bold">
+                            @if (d.DiffQty > 0)
+                            {
+                                <span class="text-success">+@d.DiffQty</span>
+                            }
+                            else if (d.DiffQty < 0)
+                            {
+                                <span class="text-danger">@d.DiffQty</span>
+                            }
+                            else
+                            {
+                                <span class="text-muted">0</span>
+                            }
+                        </td>
+                        <td class="text-end">@d.UnitPrice.ToString("F2")</td>
+                        <td class="text-end fw-bold">
+                            @if (d.DiffQty != 0)
+                            {
+                                var amt = d.DiffQty * d.UnitPrice;
+                                <span class="@(amt > 0 ? "text-success" : "text-danger")">@amt.ToString("F2")</span>
+                            }
+                            else
+                            {
+                                <span class="text-muted">0.00</span>
+                            }
+                        </td>
+                        <td>@(d.Remark ?? "")</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+
+    @* 底部操作 *@
+    @if (Model.Status == 2 && isManager)
+    {
+        <div class="d-flex gap-2 mt-3">
+            <form method="post" asp-action="Approve" asp-route-id="@Model.Id">
+                <button type="submit" class="btn btn-success" onclick="return confirm('确认审批通过？系统将自动调整库存。')">
+                    <i class="bi bi-check-circle me-1"></i>审批通过（调整库存）
+                </button>
+            </form>
+        </div>
+    }
+    @if (Model.Status != 3 && Model.Status != 4)
+    {
+        <div class="d-flex gap-2 mt-3">
+            <form method="post" asp-action="Cancel" asp-route-id="@Model.Id">
+                <button type="submit" class="btn btn-outline-danger" onclick="return confirm('确认取消此盘点单？取消后冻结将解除。')">
+                    <i class="bi bi-x-circle me-1"></i>取消盘点
+                </button>
+            </form>
+        </div>
+    }
+</div>
+
+@functions {
+    Microsoft.AspNetCore.Html.IHtmlContent StatusBadge(int st, string? name)
+    {
+        var cls = st switch
+        {
+            0 => "bg-light text-dark",
+            1 => "bg-info",
+            2 => "bg-warning text-dark",
+            3 => "bg-success",
+            4 => "bg-secondary",
+            _ => "bg-light text-dark"
+        };
+        return new Microsoft.AspNetCore.Html.HtmlString($"<span class=\"badge {cls}\">{name}</span>");
+    }
+}

@@ -1,0 +1,2 @@
+c:\Users\bey\Desktop\THMS\EquipmentIMS.DataGen\Program.cs(8,8): warning CS8321: 声明了本地函数“Q”，但从未使用过 [c:\Users\bey\Desktop\THMS\EquipmentIMS.DataGen\EquipmentIMS.DataGen.csproj]
+c:\Users\bey\Desktop\THMS\EquipmentIMS.DataGen\Program.cs(9,8): warning CS8321: 声明了本地函数“CB”，但从未使用过 [c:\Users\bey\Desktop\THMS\EquipmentIMS.DataGen\EquipmentIMS.DataGen.csproj]

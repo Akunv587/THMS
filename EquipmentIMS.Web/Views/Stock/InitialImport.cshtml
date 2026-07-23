@@ -1,0 +1,238 @@
+@{
+    ViewData["Title"] = "期初库存导入";
+}
+
+<div class="content-card">
+    <div class="content-header">
+        <h4><i class="bi bi-upload me-2"></i>期初库存导入</h4>
+        <div class="d-flex gap-2">
+            <a asp-action="DownloadTemplate" class="btn btn-outline-secondary btn-sm"><i class="bi bi-download me-1"></i>下载模板</a>
+            <a asp-action="Index" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i>返回</a>
+        </div>
+    </div>
+
+    <div class="alert alert-info mb-3">
+        <strong>操作说明：</strong>
+        <ol class="mb-0">
+            <li>下载 Excel 模板，按格式填写：设备编码、仓库名称、数量</li>
+            <li>上传文件进行预览校验</li>
+            <li>确认所有数据校验通过后，点击"确认导入"完成期初库存导入</li>
+        </ol>
+        <strong class="text-danger">注意：</strong>同一设备+仓库已有库存时无法重复导入。
+    </div>
+
+    <!-- 上传区域 -->
+    <div id="uploadSection">
+        <div class="upload-zone" id="uploadZone">
+            <div class="upload-icon"><i class="bi bi-cloud-upload" style="font-size:2.5rem;"></i></div>
+            <h5>拖拽文件到此处，或点击选择文件</h5>
+            <p class="text-muted small">支持 .xlsx 格式</p>
+            <input type="file" id="fileInput" accept=".xlsx" style="display:none;" />
+            <div id="fileInfo" class="mt-2" style="display:none;">
+                <span id="fileName" class="badge bg-light text-dark"></span>
+                <button type="button" class="btn btn-outline-danger btn-sm ms-2" id="clearFile"><i class="bi bi-x"></i></button>
+            </div>
+        </div>
+        <div class="text-center mt-3" id="btnArea" style="display:none;">
+            <button type="button" class="btn btn-primary" id="previewBtn"><i class="bi bi-eye me-1"></i>预览数据</button>
+        </div>
+    </div>
+
+    <!-- 预览区域 -->
+    <div id="previewSection" style="display:none;">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h5 class="mb-0"><i class="bi bi-table me-2"></i>预览结果</h5>
+            <div>
+                <span id="previewSummary" class="me-3"></span>
+                <button type="button" class="btn btn-outline-secondary btn-sm" id="reuploadBtn"><i class="bi bi-arrow-repeat me-1"></i>重新上传</button>
+            </div>
+        </div>
+
+        <div class="table-responsive" style="max-height:450px;overflow-y:auto;">
+            <table class="table table-sm table-bordered">
+                <thead class="table-light sticky-top">
+                    <tr>
+                        <th style="width:60px;">行号</th>
+                        <th>设备编码</th>
+                        <th>设备名称</th>
+                        <th>仓库</th>
+                        <th class="text-end" style="width:100px;">数量</th>
+                        <th style="width:200px;">校验结果</th>
+                    </tr>
+                </thead>
+                <tbody id="previewBody"></tbody>
+            </table>
+        </div>
+
+        <div class="text-center mt-3">
+            <button type="button" class="btn btn-success btn-lg" id="confirmBtn" disabled>
+                <i class="bi bi-check-circle me-1"></i>确认导入
+            </button>
+        </div>
+    </div>
+
+    <!-- 导入结果 -->
+    <div id="resultSection" style="display:none;" class="mt-4"></div>
+
+    <!-- Loading -->
+    <div id="loadingMask" style="display:none;" class="text-center py-5">
+        <div class="spinner-border text-primary" role="status"></div>
+        <p class="mt-2 text-muted">正在处理，请稍候...</p>
+    </div>
+</div>
+
+@section Styles {
+<style>
+    .upload-zone {
+        border: 2px dashed #dee2e6;
+        border-radius: 8px;
+        padding: 2.5rem;
+        text-align: center;
+        cursor: pointer;
+        transition: all .2s;
+    }
+    .upload-zone:hover, .upload-zone.dragover {
+        border-color: #0d6efd;
+        background: #f0f7ff;
+    }
+    .upload-icon { color: #adb5bd; margin-bottom: 0.5rem; }
+    tr.row-error { background-color: #fff5f5 !important; }
+    tr.row-valid { background-color: #f6fff6 !important; }
+</style>
+}
+
+@section Scripts {
+<script>
+    $(function() {
+        var previewData = null;
+        var uploadZone = $('#uploadZone'), fileInput = $('#fileInput'),
+            fileInfo = $('#fileInfo'), fileName = $('#fileName'),
+            btnArea = $('#btnArea'), clearFile = $('#clearFile'),
+            previewSection = $('#previewSection'), reuploadBtn = $('#reuploadBtn'),
+            confirmBtn = $('#confirmBtn'), previewBody = $('#previewBody'),
+            previewSummary = $('#previewSummary'), resultSection = $('#resultSection'),
+            uploadSec = $('#uploadSection'), loadingMask = $('#loadingMask');
+
+        // 拖拽事件
+        uploadZone.on('click', function() { if (!previewSection.is(':visible')) fileInput.click(); });
+        uploadZone.on('dragover', function(e) { e.preventDefault(); $(this).addClass('dragover'); });
+        uploadZone.on('dragleave', function() { $(this).removeClass('dragover'); });
+        uploadZone.on('drop', function(e) {
+            e.preventDefault();
+            $(this).removeClass('dragover');
+            if (e.originalEvent.dataTransfer.files.length) handleFile(e.originalEvent.dataTransfer.files[0]);
+        });
+        fileInput.on('change', function() { if (this.files.length) handleFile(this.files[0]); });
+        clearFile.on('click', function() { resetUpload(); });
+        reuploadBtn.on('click', function() { resetUpload(); previewSection.hide(); });
+
+        function handleFile(file) {
+            if (!file.name.endsWith('.xlsx')) { alert('仅支持 .xlsx 格式'); return; }
+            fileName.text(file.name); fileInfo.show(); btnArea.show();
+        }
+
+        function resetUpload() {
+            fileInput.val(''); fileInfo.hide(); btnArea.hide();
+        }
+
+        $('#previewBtn').on('click', function() {
+            var file = fileInput[0].files[0];
+            if (!file) return;
+            var formData = new FormData();
+            formData.append('file', file);
+            previewBody.empty();
+            previewSection.show();
+            uploadSec.hide();
+            loadingMask.show();
+
+            $.ajax({
+                url: '@Url.Action("PreviewImport")',
+                type: 'POST',
+                data: formData,
+                processData: false,
+                contentType: false,
+                success: function(res) {
+                    loadingMask.hide();
+                    if (!res.success) { alert(res.message); previewSection.hide(); uploadSec.show(); return; }
+                    previewData = res.data;
+                    renderPreview(previewData);
+                },
+                error: function() { loadingMask.hide(); alert('请求失败'); previewSection.hide(); uploadSec.show(); }
+            });
+        });
+
+        function renderPreview(data) {
+            previewBody.empty();
+            var allValid = true;
+            $.each(data.items, function(i, item) {
+                var cls = item.valid ? 'row-valid' : 'row-error';
+                var status = item.valid ? '<span class="text-success"><i class="bi bi-check-circle"></i> 通过</span>'
+                    : '<span class="text-danger"><i class="bi bi-x-circle"></i> ' + item.error + '</span>';
+                if (!item.valid) allValid = false;
+
+                previewBody.append(
+                    '<tr class="' + cls + '">' +
+                    '<td>' + item.row + '</td>' +
+                    '<td>' + item.productCode + '</td>' +
+                    '<td>' + item.productName + '</td>' +
+                    '<td>' + item.warehouseName + '</td>' +
+                    '<td class="text-end">' + item.quantity + '</td>' +
+                    '<td>' + status + '</td>' +
+                    '</tr>'
+                );
+            });
+
+            previewSummary.html(
+                '共 <strong>' + data.totalCount + '</strong> 行，' +
+                '通过 <strong class="text-success">' + data.validCount + '</strong>，' +
+                '不通过 <strong class="text-danger">' + data.invalidCount + '</strong>'
+            );
+
+            confirmBtn.prop('disabled', !allValid || data.validCount === 0);
+            resultSection.hide();
+        }
+
+        confirmBtn.on('click', function() {
+            if (!previewData || !previewData.items) return;
+            var validItems = [];
+            $.each(previewData.items, function(i, item) {
+                if (item.valid) {
+                    validItems.push({
+                        productId: item.productId,
+                        productCode: item.productCode,
+                        warehouseId: item.warehouseId,
+                        warehouseName: item.warehouseName,
+                        quantity: item.quantity,
+                        productName: item.productName
+                    });
+                }
+            });
+
+            if (!validItems.length) { alert('没有可导入的数据'); return; }
+            if (!confirm('确认导入 ' + validItems.length + ' 条期初库存数据？此操作不可撤销。')) return;
+
+            loadingMask.show();
+            $.ajax({
+                url: '@Url.Action("ConfirmImport")',
+                type: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify(validItems),
+                success: function(res) {
+                    loadingMask.hide();
+                    confirmBtn.hide();
+                    resultSection.show().html(
+                        '<div class="alert ' + (res.success ? 'alert-success' : 'alert-danger') + '">' +
+                        '<h5><i class="bi ' + (res.success ? 'bi-check-circle' : 'bi-x-circle') + ' me-2"></i>' + res.message + '</h5>' +
+                        (res.data && res.data.failItems && res.data.failItems.length > 0
+                            ? '<ul class="mb-0 mt-2">' + $.map(res.data.failItems, function(f) { return '<li>' + f + '</li>'; }).join('') + '</ul>'
+                            : '') +
+                        '</div>'
+                    );
+                    if (res.success) { reuploadBtn.hide(); }
+                },
+                error: function() { loadingMask.hide(); alert('请求失败'); }
+            });
+        });
+    });
+</script>
+}

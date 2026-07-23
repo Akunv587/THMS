@@ -1,0 +1,99 @@
+@* 参数：page, pageSize, totalCount, actionName, controllerName, routeValues *@
+@{
+    var page = (int)(ViewData["Page"] ?? 1);
+    var pageSize = (int)(ViewData["PageSize"] ?? 10);
+    var totalCount = Convert.ToInt64(ViewData["TotalCount"] ?? 0);
+    var actionName = ViewData["ActionName"] as string ?? "";
+    var controllerName = ViewData["ControllerName"] as string ?? "";
+    var totalPages = (int)Math.Ceiling((double)totalCount / pageSize);
+    var routeValues = ViewData["RouteValues"] as Dictionary<string, object?> ?? new Dictionary<string, object?>();
+}
+
+<div class="pager">
+    <div class="page-size d-flex align-items-center gap-2">
+        <span>每页</span>
+        <select class="form-select form-select-sm" onchange="changePageSize(this.value)">
+            @foreach (var size in new[] { 10, 20, 50, 100 })
+            {
+                var selected = size == pageSize ? "selected" : null;
+                <option value="@size" selected="@selected">@size</option>
+            }
+        </select>
+        <span>条</span>
+    </div>
+
+    <nav>
+        <ul class="pagination pagination-sm">
+            <li class="page-item @(page <= 1 ? "disabled" : "")">
+                <a class="page-link" href="#" onclick="goToPage(1);return false;" title="首页">
+                    <i class="bi bi-chevron-double-left"></i>
+                </a>
+            </li>
+            <li class="page-item @(page <= 1 ? "disabled" : "")">
+                <a class="page-link" href="#" onclick="goToPage(@(page - 1));return false;" title="上一页">
+                    <i class="bi bi-chevron-left"></i>
+                </a>
+            </li>
+
+            @{
+                var startPage = Math.Max(1, page - 2);
+                var endPage = Math.Min(totalPages, page + 2);
+
+                if (startPage > 1)
+                {
+                    <li class="page-item"><a class="page-link" href="#" onclick="goToPage(1);return false;">1</a></li>
+                    if (startPage > 2)
+                    {
+                        <li class="page-item disabled"><span class="page-link">...</span></li>
+                    }
+                }
+
+                for (var i = startPage; i <= endPage; i++)
+                {
+                    <li class="page-item @(i == page ? "active" : "")">
+                        <a class="page-link" href="#" onclick="goToPage(@i);return false;">@i</a>
+                    </li>
+                }
+
+                if (endPage < totalPages)
+                {
+                    if (endPage < totalPages - 1)
+                    {
+                        <li class="page-item disabled"><span class="page-link">...</span></li>
+                    }
+                    <li class="page-item"><a class="page-link" href="#" onclick="goToPage(@totalPages);return false;">@totalPages</a></li>
+                }
+            }
+
+            <li class="page-item @(page >= totalPages ? "disabled" : "")">
+                <a class="page-link" href="#" onclick="goToPage(@(page + 1));return false;" title="下一页">
+                    <i class="bi bi-chevron-right"></i>
+                </a>
+            </li>
+            <li class="page-item @(page >= totalPages ? "disabled" : "")">
+                <a class="page-link" href="#" onclick="goToPage(@totalPages);return false;" title="末页">
+                    <i class="bi bi-chevron-double-right"></i>
+                </a>
+            </li>
+        </ul>
+    </nav>
+
+    <div class="page-info">
+        共 <strong>@totalCount</strong> 条记录，第 <strong>@(page)</strong>/<strong>@totalPages</strong> 页
+    </div>
+</div>
+
+<script>
+    function goToPage(p) {
+        var url = new URL(window.location.href);
+        url.searchParams.set('page', p);
+        window.location.href = url.toString();
+    }
+
+    function changePageSize(size) {
+        var url = new URL(window.location.href);
+        url.searchParams.set('pageSize', size);
+        url.searchParams.set('page', 1);
+        window.location.href = url.toString();
+    }
+</script>

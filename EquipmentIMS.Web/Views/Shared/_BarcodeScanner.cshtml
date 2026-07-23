@@ -1,0 +1,70 @@
+@*
+    可复用条码扫描输入组件
+    用法：<partial name="_BarcodeScanner" />
+    页面需定义全局函数 onBarcodeScanned(product) 处理扫描结果
+    product 包含: id, code, name, spec, brand, unit, barCode, purchasePrice, salePrice
+*@
+
+<div class="card mb-3 border-primary">
+    <div class="card-body py-2">
+        <h6 class="card-title mb-2"><i class="bi bi-upc-scan me-1"></i>扫码输入</h6>
+        <div class="input-group input-group-sm">
+            <span class="input-group-text bg-primary text-white"><i class="bi bi-upc"></i></span>
+            <input type="text" id="scanBarcode" class="form-control"
+                   placeholder="扫描或输入设备条码，按回车确认..."
+                   autofocus
+                   autocomplete="off" />
+            <button type="button" class="btn btn-outline-primary" id="btnScanSearch" title="手动搜索">
+                <i class="bi bi-search"></i>
+            </button>
+        </div>
+        <div id="scanFeedback" class="form-text mt-1" style="min-height:18px;"></div>
+    </div>
+</div>
+
+<script>
+    $(function () {
+        var $input = $('#scanBarcode');
+        var $feedback = $('#scanFeedback');
+
+        function doScan() {
+            var barCode = $input.val().trim();
+            if (!barCode) {
+                showFeedback('请输入或扫描条码', 'text-muted');
+                return;
+            }
+
+            showFeedback('<span class="spinner-border spinner-border-sm me-1"></span>查询中...', 'text-primary');
+
+            $.get('/Product/FindByBarCode', { barCode: barCode }, function (res) {
+                if (res.success) {
+                    showFeedback('<i class="bi bi-check-circle me-1"></i>找到设备：' + res.data.name, 'text-success');
+                    if (typeof onBarcodeScanned === 'function') {
+                        onBarcodeScanned(res.data);
+                    }
+                    $input.val('').focus();
+                } else {
+                    showFeedback('<i class="bi bi-exclamation-circle me-1"></i>' + (res.message || '未找到设备'), 'text-danger');
+                    $input.select();
+                }
+            }).fail(function () {
+                showFeedback('<i class="bi bi-exclamation-circle me-1"></i>查询失败，请重试', 'text-danger');
+            });
+        }
+
+        function showFeedback(msg, cls) {
+            $feedback.removeClass('text-muted text-success text-danger text-primary').addClass(cls || 'text-muted').html(msg);
+        }
+
+        $input.on('keypress', function (e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                doScan();
+            }
+        });
+
+        $('#btnScanSearch').click(function () {
+            doScan();
+        });
+    });
+</script>

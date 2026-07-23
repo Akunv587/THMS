@@ -1,0 +1,120 @@
+@{
+    ViewData["Title"] = "采购报表";
+    var groupBy = ViewData["GroupBy"] as string ?? "month";
+    var startDate = ViewData["StartDate"] as string;
+    var endDate = ViewData["EndDate"] as string;
+    var summaryJson = ViewData["SummaryData"] as string;
+    var returnStatJson = ViewData["ReturnStat"] as string;
+}
+
+<div class="content-card">
+    <div class="content-header">
+        <h4><i class="bi bi-cart-check me-2"></i>采购报表</h4>
+    </div>
+
+    <div class="search-bar mb-3">
+        <div class="d-flex gap-2 align-items-center flex-wrap">
+            <div class="input-group" style="max-width:170px"><span class="input-group-text">从</span><input id="startDate" type="date" class="form-control" value="@startDate"></div>
+            <div class="input-group" style="max-width:170px"><span class="input-group-text">到</span><input id="endDate" type="date" class="form-control" value="@endDate"></div>
+            <select id="groupBy" class="form-select" style="max-width:120px">
+                <option value="month" selected="@(groupBy == "month" ? "selected" : null)">按月</option>
+                <option value="quarter" selected="@(groupBy == "quarter" ? "selected" : null)">按季</option>
+            </select>
+            <button type="button" class="btn btn-outline-secondary" onclick="doFilter()"><i class="bi bi-search"></i> 查询</button>
+            <div class="ms-auto d-flex gap-2">
+                <a href="javascript:asyncExport('PurchaseSummary')" class="btn btn-outline-success btn-sm"><i class="bi bi-cloud-download me-1"></i>异步导出</a>
+            </div>
+        </div>
+    </div>
+
+    <!-- 采购趋势图 -->
+    <div class="row mb-4">
+        <div class="col-12"><div class="card"><div class="card-body"><div id="purchaseChart" style="height:350px"></div></div></div></div>
+    </div>
+
+    <!-- 采购汇总表 -->
+    <div class="row mb-4">
+        <div class="col-md-8">
+            <h5 class="mb-2">采购汇总</h5>
+            <div class="table-responsive">
+                <table class="table data-table table-sm">
+                    <thead><tr><th>周期</th><th class="text-end">采购金额</th><th class="text-end">订单数</th><th class="text-end">供应商数</th></tr></thead>
+                    <tbody id="summaryBody"></tbody>
+                </table>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <h5 class="mb-2">退货统计</h5>
+            <div id="returnStatPanel"></div>
+            <div id="returnChart" style="height:250px;margin-top:10px"></div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+<script>
+    var summaryData = @Html.Raw(summaryJson ?? "[]");
+    var returnStat = @Html.Raw(returnStatJson ?? "{}");
+
+    (function render(){
+        // 采购趋势
+        var pc = echarts.init(document.getElementById('purchaseChart'));
+        pc.setOption({
+            title: { text: '采购趋势', left: 'center' },
+            tooltip: { trigger: 'axis' },
+            xAxis: { type: 'category', data: summaryData.map(s => s.Period) },
+            yAxis: { type: 'value', name: '金额(元)' },
+            series: [{
+                name: '采购金额', type: 'bar',
+                data: summaryData.map(s => s.TotalAmount),
+                itemStyle: { color: '#5470c6' }
+            }]
+        });
+
+        // 汇总表
+        var rows = summaryData.map(function(s){
+            return '<tr><td>' + s.Period + '</td><td class="text-end">' + s.TotalAmount.toFixed(2) + '</td><td class="text-end">' + s.OrderCount + '</td><td class="text-end">' + s.SupplierCount + '</td></tr>';
+        }).join('');
+        document.getElementById('summaryBody').innerHTML = rows || '<tr><td colspan="4" class="text-center py-3">暂无数据</td></tr>';
+
+        // 退货面板
+        document.getElementById('returnStatPanel').innerHTML =
+            '<div class="list-group list-group-flush small">' +
+            '<div class="list-group-item d-flex justify-content-between"><span>退货次数</span><strong>' + returnStat.ReturnCount + '</strong></div>' +
+            '<div class="list-group-item d-flex justify-content-between"><span>退货金额</span><strong class="text-danger">' + (returnStat.ReturnAmount||0).toFixed(2) + '</strong></div>' +
+            '<div class="list-group-item d-flex justify-content-between"><span>退货率</span><strong>' + (returnStat.ReturnRate||0).toFixed(1) + '%</strong></div>' +
+            '</div>';
+
+        var rc = echarts.init(document.getElementById('returnChart'));
+        rc.setOption({
+            tooltip: { trigger: 'item' },
+            series: [{
+                type: 'pie', radius: '65%',
+                data: [
+                    { name: '正常采购', value: returnStat.PurchaseAmount - (returnStat.ReturnAmount||0) },
+                    { name: '退货', value: returnStat.ReturnAmount||0 }
+                ]
+            }]
+        });
+    })();
+
+    function doFilter() {
+        var url = new URL(window.location.href);
+        url.searchParams.set('startDate', document.getElementById('startDate').value);
+        url.searchParams.set('endDate', document.getElementById('endDate').value);
+        url.searchParams.set('groupBy', document.getElementById('groupBy').value);
+        window.location.href = url.toString();
+    }
+
+    function asyncExport(reportType) {
+        fetch('@Url.Action("AsyncExport")', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'RequestVerificationToken': document.querySelector('input[name="__RequestVerificationToken"]')?.value },
+            body: new URLSearchParams({
+                reportType, startDate: document.getElementById('startDate').value,
+                endDate: document.getElementById('endDate').value,
+                param1: document.getElementById('groupBy').value
+            })
+        }).then(r => r.json()).then(d => alert(d.message));
+    }
+</script>

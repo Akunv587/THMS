@@ -1,0 +1,126 @@
+@model EquipmentIMS.Web.Models.MaintenancePlanViewModel
+@{
+    ViewData["Title"] = Model.Id > 0 ? "编辑保养计划" : "新建保养计划";
+    var cycleTypeList = ViewData["CycleTypeList"] as SelectList;
+}
+
+<div class="content-card" style="max-width:720px">
+    <div class="content-header">
+        <h4>@ViewData["Title"]</h4>
+        <a asp-action="Index" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i>返回</a>
+    </div>
+
+    <form asp-action="@(Model.Id > 0 ? "Edit" : "Create")" method="post">
+        @Html.AntiForgeryToken()
+        <input type="hidden" asp-for="Id" />
+
+        <div class="row g-3">
+            <div class="col-12">
+                <label class="form-label fw-bold">选择设备档案 <span class="text-danger">*</span></label>
+                <select id="deviceArchiveSelect" class="form-select" style="width:100%">
+                    @if (Model.DeviceArchiveId > 0)
+                    {
+                        <option value="@Model.DeviceArchiveId" selected>@Model.DeviceArchiveId</option>
+                    }
+                    else
+                    {
+                        <option value="">-- 输入序列号搜索设备 --</option>
+                    }
+                </select>
+                <input type="hidden" asp-for="DeviceArchiveId" id="DeviceArchiveId" />
+                <span asp-validation-for="DeviceArchiveId" class="text-danger small"></span>
+                <div id="archiveInfo" class="mt-2 small text-muted" style="display:none"></div>
+            </div>
+
+            <div class="col-md-8">
+                <label asp-for="PlanName" class="form-label"></label>
+                <input asp-for="PlanName" class="form-control" placeholder="如：月度巡检、季度保养" />
+                <span asp-validation-for="PlanName" class="text-danger small"></span>
+            </div>
+
+            <div class="col-md-4">
+                <label asp-for="CycleType" class="form-label"></label>
+                <select asp-for="CycleType" class="form-select" asp-items="cycleTypeList"
+                        onchange="updateCycleDays()" id="cycleTypeSelect"></select>
+            </div>
+
+            <div class="col-md-4">
+                <label asp-for="CycleDays" class="form-label"></label>
+                <input asp-for="CycleDays" class="form-control" type="number" min="1" max="999" />
+            </div>
+
+            <div class="col-md-4">
+                <label asp-for="NextDate" class="form-label"></label>
+                <input asp-for="NextDate" class="form-control" type="date" />
+                <span asp-validation-for="NextDate" class="text-danger small"></span>
+            </div>
+
+            <div class="col-md-4 d-flex align-items-end">
+                <div class="form-check">
+                    <input asp-for="IsActive" class="form-check-input" />
+                    <label asp-for="IsActive" class="form-check-label"></label>
+                </div>
+            </div>
+
+            <div class="col-12">
+                <label asp-for="Content" class="form-label"></label>
+                <textarea asp-for="Content" class="form-control" rows="4" placeholder="保养内容明细"></textarea>
+            </div>
+
+            <div class="col-12">
+                <label asp-for="Remark" class="form-label"></label>
+                <textarea asp-for="Remark" class="form-control" rows="2"></textarea>
+            </div>
+        </div>
+
+        <div class="mt-4">
+            <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg me-1"></i>保存</button>
+            <a asp-action="Index" class="btn btn-outline-secondary ms-2">取消</a>
+        </div>
+    </form>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    <script>
+        var defaultCycleDays = { "1": 30, "2": 90, "3": 180, "4": 365 };
+
+        $(function () {
+            $('#deviceArchiveSelect').select2({
+                placeholder: '输入序列号搜索设备...',
+                minimumInputLength: 1,
+                ajax: {
+                    url: '@Url.Action("SearchDeviceArchives")',
+                    dataType: 'json',
+                    delay: 300,
+                    data: function (params) { return { term: params.term }; },
+                    processResults: function (data) { return { results: data.results }; }
+                }
+            }).on('select2:select', function (e) {
+                $('#DeviceArchiveId').val(e.params.data.id);
+                loadArchiveInfo(e.params.data.id);
+            }).on('select2:clear', function () {
+                $('#DeviceArchiveId').val('');
+                $('#archiveInfo').hide();
+            });
+        });
+
+        function updateCycleDays() {
+            var ct = $('#cycleTypeSelect').val();
+            if (defaultCycleDays[ct]) {
+                $('#CycleDays').val(defaultCycleDays[ct]);
+            }
+        }
+
+        function loadArchiveInfo(archiveId) {
+            fetch('@Url.Action("GetArchiveInfo")' + '?id=' + archiveId)
+                .then(r => r.json())
+                .then(d => {
+                    if (d.success) {
+                        var a = d.data;
+                        $('#archiveInfo').html('<strong>' + a.serialNo + '</strong> - ' + a.productName + ' | 客户: ' + a.customerName).show();
+                    }
+                });
+        }
+    </script>
+}

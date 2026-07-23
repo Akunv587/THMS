@@ -1,0 +1,211 @@
+@model StockTransferCreateDto
+@{
+    ViewData["Title"] = "新建调拨";
+    var warehouseList = ViewData["WarehouseList"] as SelectList;
+}
+
+<div class="content-card">
+    <div class="content-header">
+        <h4><i class="bi bi-arrow-left-right me-2"></i>新建调拨</h4>
+    </div>
+
+    <form asp-action="Create" method="post" id="transferForm">
+        <div asp-validation-summary="ModelOnly" class="alert alert-danger"></div>
+
+        <div class="row g-3 mb-3">
+            <div class="col-md-4">
+                <label class="form-label">调出仓库 <span class="text-danger">*</span></label>
+                <select asp-for="FromWarehouseId" class="form-select" id="fromWarehouse">
+                    <option value="">-- 请选择调出仓库 --</option>
+                    @if (warehouseList != null)
+                    {
+                        @foreach (var item in warehouseList)
+                        {
+                            <option value="@item.Value">@item.Text</option>
+                        }
+                    }
+                </select>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">调入仓库 <span class="text-danger">*</span></label>
+                <select asp-for="ToWarehouseId" class="form-select" id="toWarehouse">
+                    <option value="">-- 请选择调入仓库 --</option>
+                    @if (warehouseList != null)
+                    {
+                        @foreach (var item in warehouseList)
+                        {
+                            <option value="@item.Value">@item.Text</option>
+                        }
+                    }
+                </select>
+            </div>
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">设备明细 <span class="text-danger">*</span></label>
+            <div class="d-flex gap-2 mb-2">
+                <button type="button" class="btn btn-outline-primary btn-sm" onclick="showProductSelector()" id="btnAddProduct" disabled>
+                    <i class="bi bi-plus-lg me-1"></i>添加设备
+                </button>
+            </div>
+            <div class="table-responsive">
+                <table class="table data-table table-sm" id="itemsTable">
+                    <thead>
+                        <tr>
+                            <th>设备编码</th>
+                            <th>设备名称</th>
+                            <th style="width:100px">可用库存</th>
+                            <th style="width:120px">调拨数量</th>
+                            <th>备注</th>
+                            <th style="width:60px"></th>
+                        </tr>
+                    </thead>
+                    <tbody id="itemsBody">
+                        <tr id="emptyRow"><td colspan="6" class="text-center text-muted py-3">请先选择调出仓库，然后添加设备</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="mb-3">
+            <label asp-for="Remark" class="form-label">备注</label>
+            <textarea asp-for="Remark" class="form-control" rows="2" placeholder="可选，填写调拨说明"></textarea>
+        </div>
+
+        <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg me-1"></i>创建调拨单</button>
+            <a asp-action="Index" class="btn btn-outline-secondary">返回列表</a>
+        </div>
+    </form>
+</div>
+
+<script>
+    var productCache = [];
+
+    document.getElementById('fromWarehouse').addEventListener('change', function () {
+        var wid = this.value;
+        if (!wid) {
+            document.getElementById('btnAddProduct').disabled = true;
+            productCache = [];
+            document.getElementById('itemsBody').innerHTML = '<tr id="emptyRow"><td colspan="6" class="text-center text-muted py-3">请先选择调出仓库，然后添加设备</td></tr>';
+            return;
+        }
+        fetch('@Url.Action("GetProducts")?warehouseId=' + wid)
+            .then(r => r.json())
+            .then(res => {
+                if (res.success) {
+                    productCache = res.data;
+                    document.getElementById('btnAddProduct').disabled = false;
+                } else {
+                    alert(res.message);
+                }
+            });
+    });
+
+    function showProductSelector() {
+        if (productCache.length === 0) {
+            alert('该仓库无可调拨库存');
+            return;
+        }
+        var options = productCache.map(p => `<option value="${p.productId}" data-avail="${p.availableQty}" data-code="${p.productCode}" data-name="${p.productName}">${p.productCode} - ${p.productName}（可用:${p.availableQty}）</option>`).join('');
+        var productId = promptSelectProduct(options);
+        if (!productId) return;
+        var prod = productCache.find(p => p.productId == productId);
+        if (!prod) return;
+        addItemRow(prod);
+    }
+
+    function promptSelectProduct(options) {
+        var html = `<select id="productSelect" class="form-select" size="8" style="min-width:400px"><option value="">-- 请选择设备 --</option>${options}</select>`;
+        var result = prompt(html, '');
+        return null; // use a dialog fallback
+    }
+
+    function addItemRow(prod) {
+        var idx = document.querySelectorAll('#itemsBody tr.item-row').length;
+        // check duplicate
+        var existing = document.querySelectorAll('#itemsBody input[name^="Items["][name$="].ProductId"]');
+        for (var i = 0; i < existing.length; i++) {
+            if (existing[i].value == prod.productId) { alert('该设备已添加'); return; }
+        }
+        var emptyRow = document.getElementById('emptyRow');
+        if (emptyRow) emptyRow.remove();
+
+        var tr = document.createElement('tr');
+        tr.className = 'item-row';
+        tr.innerHTML =
+            `<td>${prod.productCode}<input type="hidden" name="Items[${idx}].ProductId" value="${prod.productId}" /></td>
+             <td>${prod.productName}</td>
+             <td class="text-center">${prod.availableQty}</td>
+             <td><input type="number" class="form-control form-control-sm text-center" name="Items[${idx}].Qty" value="0" min="1" max="${prod.availableQty}" required /></td>
+             <td><input type="text" class="form-control form-control-sm" name="Items[${idx}].Remark" /></td>
+             <td><button type="button" class="btn btn-sm btn-outline-danger" onclick="this.closest('tr').remove();if(!document.querySelectorAll('#itemsBody tr.item-row').length)document.getElementById('itemsBody').innerHTML='<tr id=emptyRow><td colspan=6 class=text-center class=text-muted class=py-3>请先选择调出仓库，然后添加设备</td></tr>'"><i class="bi bi-trash"></i></button></td>`;
+        document.getElementById('itemsBody').appendChild(tr);
+    }
+
+    // Product selector modal
+    function promptSelectProduct(options) {
+        var modal = document.createElement('div');
+        modal.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center';
+        modal.innerHTML = `<div style="background:#fff;border-radius:8px;padding:20px;max-width:500px;width:90%;max-height:70vh;overflow-y:auto">
+            <h5 class="mb-3">选择设备</h5>
+            <select id="modalSelect" size="10" style="width:100%"><option value="">-- 请选择 --</option>${options}</select>
+            <div class="d-flex gap-2 mt-3 justify-content-end">
+                <button type="button" id="modalCancel" class="btn btn-outline-secondary btn-sm">取消</button>
+                <button type="button" id="modalConfirm" class="btn btn-primary btn-sm">确定</button>
+            </div></div>`;
+        document.body.appendChild(modal);
+
+        return new Promise(function (resolve) {
+            document.getElementById('modalConfirm').onclick = function () {
+                var val = document.getElementById('modalSelect').value;
+                document.body.removeChild(modal);
+                resolve(val || null);
+            };
+            document.getElementById('modalCancel').onclick = function () {
+                document.body.removeChild(modal);
+                resolve(null);
+            };
+        });
+    }
+
+    document.getElementById('transferForm').addEventListener('submit', function (e) {
+        var fromW = document.getElementById('fromWarehouse').value;
+        var toW = document.getElementById('toWarehouse').value;
+        if (!fromW || !toW) {
+            alert('请选择调出仓库和调入仓库');
+            e.preventDefault();
+            return;
+        }
+        if (fromW === toW) {
+            alert('调出仓库和调入仓库不能相同');
+            e.preventDefault();
+            return;
+        }
+        var rows = document.querySelectorAll('#itemsBody tr.item-row');
+        if (rows.length === 0) {
+            alert('请添加调拨设备');
+            e.preventDefault();
+            return;
+        }
+        for (var i = 0; i < rows.length; i++) {
+            var qtyInput = rows[i].querySelector('input[type="number"]');
+            var qty = parseInt(qtyInput.value) || 0;
+            if (qty <= 0) {
+                alert('设备调拨数量必须大于0');
+                e.preventDefault();
+                return;
+            }
+            var max = parseInt(qtyInput.max) || 0;
+            if (qty > max) {
+                alert('调拨数量不能超过可用库存（' + max + '）');
+                e.preventDefault();
+                return;
+            }
+        }
+    });
+</script>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

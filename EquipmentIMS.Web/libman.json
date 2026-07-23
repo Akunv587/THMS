@@ -1,0 +1,26 @@
+{
+  "version": "1.0",
+  "defaultProvider": "cdnjs",
+  "libraries": [
+    {
+      "library": "twitter-bootstrap@5.3.3",
+      "destination": "wwwroot/lib/bootstrap"
+    },
+    {
+      "library": "jquery@3.7.1",
+      "destination": "wwwroot/lib/jquery"
+    },
+    {
+      "library": "select2@4.1.0-rc.0",
+      "destination": "wwwroot/lib/select2"
+    },
+    {
+      "library": "echarts@5.5.1",
+      "destination": "wwwroot/lib/echarts"
+    },
+    {
+      "library": "bootstrap-icons@1.11.3",
+      "destination": "wwwroot/lib/bootstrap-icons"
+    }
+  ]
+}

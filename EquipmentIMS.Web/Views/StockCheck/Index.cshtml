@@ -1,0 +1,139 @@
+@model PagedResult<StockCheckListDto>
+@{
+    ViewData["Title"] = "盘点管理";
+    var status = ViewData["Status"] as int?;
+    var keyword = ViewData["Keyword"] as string;
+    var statusList = ViewData["StatusList"] as SelectList;
+}
+
+<div class="content-card">
+    <div class="content-header">
+        <h4><i class="bi bi-clipboard-check me-2"></i>盘点管理</h4>
+        <a asp-action="Create" class="btn btn-primary btn-sm"><i class="bi bi-plus-lg me-1"></i>新建盘点</a>
+    </div>
+
+    @if (TempData["Success"] != null)
+    {
+        <div class="alert alert-success alert-dismissible fade show" role="alert">
+            @TempData["Success"]<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    }
+    @if (TempData["Error"] != null)
+    {
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            @TempData["Error"]<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    }
+
+    <div class="search-bar mb-3">
+        <div class="d-flex gap-2 align-items-center flex-wrap">
+            <select id="searchStatus" class="form-select" style="max-width:140px" onchange="doSearch()">
+                @if (statusList != null)
+                {
+                    @foreach (var item in statusList)
+                    {
+                        var selected = (!status.HasValue && string.IsNullOrEmpty(item.Value))
+                            || (status.HasValue && status.Value.ToString() == item.Value) ? "selected" : null;
+                        <option value="@item.Value" selected="@selected">@item.Text</option>
+                    }
+                }
+            </select>
+            <input type="text" id="searchKeyword" class="form-control" style="max-width:200px" placeholder="盘点单号" value="@keyword" onkeydown="if(event.keyCode===13)doSearch()">
+            <button type="button" class="btn btn-outline-secondary" onclick="doSearch()"><i class="bi bi-search me-1"></i>搜索</button>
+            <button type="button" class="btn btn-outline-secondary" onclick="doReset()"><i class="bi bi-arrow-repeat me-1"></i>重置</button>
+        </div>
+    </div>
+
+    <div class="table-responsive">
+        <table class="table data-table">
+            <thead>
+                <tr>
+                    <th>盘点单号</th>
+                    <th>仓库</th>
+                    <th>盘点日期</th>
+                    <th>状态</th>
+                    <th>盘点进度</th>
+                    <th>差异金额</th>
+                    <th>操作人</th>
+                    <th>创建时间</th>
+                    <th style="width:120px">操作</th>
+                </tr>
+            </thead>
+            <tbody>
+                @if (!Model.Items.Any())
+                {
+                    <tr><td colspan="9" class="text-center text-muted py-4">暂无数据</td></tr>
+                }
+                @foreach (var item in Model.Items)
+                {
+                    <tr>
+                        <td><span class="fw-medium">@item.CheckNo</span></td>
+                        <td>@item.WarehouseName</td>
+                        <td>@item.CheckDate.ToString("yyyy-MM-dd")</td>
+                        <td>@StatusBadge(item.Status, item.StatusName)</td>
+                        <td>
+                            <div class="d-flex align-items-center gap-2">
+                                <div class="progress flex-grow-1" style="height:6px">
+                                    <div class="progress-bar @(item.CheckedCount == item.TotalProducts ? "bg-success" : "bg-primary")"
+                                         style="width:@(item.TotalProducts > 0 ? item.CheckedCount * 100 / item.TotalProducts : 0)%"></div>
+                                </div>
+                                <small class="text-muted">@item.CheckedCount/@item.TotalProducts</small>
+                            </div>
+                        </td>
+                        <td>@item.TotalDiffAmount.ToString("F2")</td>
+                        <td>@(item.Operator ?? "-")</td>
+                        <td>@item.CreateTime.ToString("yyyy-MM-dd")</td>
+                        <td>
+                            @if (item.Status == 0 || item.Status == 1)
+                            {
+                                <a asp-action="Record" asp-route-id="@item.Id" class="btn btn-sm btn-outline-primary" title="录入实盘"><i class="bi bi-pencil-square"></i></a>
+                            }
+                            else
+                            {
+                                <a asp-action="Details" asp-route-id="@item.Id" class="btn btn-sm btn-outline-info" title="详情"><i class="bi bi-eye"></i></a>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+
+    @{
+        ViewData["Page"] = Model.Page;
+        ViewData["PageSize"] = Model.PageSize;
+        ViewData["TotalCount"] = Model.TotalCount;
+        @await Html.PartialAsync("_Pager")
+    }
+</div>
+
+@functions {
+    Microsoft.AspNetCore.Html.IHtmlContent StatusBadge(int st, string? name)
+    {
+        var cls = st switch
+        {
+            0 => "bg-light text-dark",
+            1 => "bg-info",
+            2 => "bg-warning text-dark",
+            3 => "bg-success",
+            4 => "bg-secondary",
+            _ => "bg-light text-dark"
+        };
+        return new Microsoft.AspNetCore.Html.HtmlString($"<span class=\"badge {cls}\">{name}</span>");
+    }
+}
+
+<script>
+    function doSearch() {
+        var url = new URL(window.location.href);
+        var st = document.getElementById('searchStatus').value;
+        var kw = document.getElementById('searchKeyword').value;
+        if (st) url.searchParams.set('status', st); else url.searchParams.delete('status');
+        if (kw) url.searchParams.set('keyword', kw); else url.searchParams.delete('keyword');
+        url.searchParams.set('page', 1);
+        window.location.href = url.toString();
+    }
+    function doReset() {
+        window.location.href = '@Url.Action("Index")';
+    }
+</script>

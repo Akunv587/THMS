@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"]</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body {
+            font-family: SimSun, "宋体", "Microsoft YaHei", serif;
+            font-size: 14px;
+            color: #000;
+            background: #f0f0f0;
+        }
+        .print-container {
+            width: 210mm;
+            min-height: 297mm;
+            margin: 0 auto;
+            padding: 15mm 15mm 20mm 15mm;
+            background: #fff;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        @@media print {
+            html, body {
+                background: #fff;
+                margin: 0;
+                padding: 0;
+            }
+            .print-container {
+                width: 100%;
+                min-height: auto;
+                margin: 0;
+                padding: 10mm;
+                box-shadow: none;
+            }
+            .no-print { display: none !important; }
+            .print-only { display: block !important; }
+            @@page { size: A4; margin: 0; }
+        }
+    </style>
+    @RenderSection("Styles", required: false)
+</head>
+<body>
+    <div class="print-container">
+        @RenderBody()
+    </div>
+    <div class="no-print" style="text-align:center;margin-top:20px;padding-bottom:20px;">
+        <button onclick="window.print()" style="padding:8px 24px;font-size:14px;cursor:pointer;">打印</button>
+        <button onclick="window.close()" style="padding:8px 24px;font-size:14px;cursor:pointer;margin-left:8px;">关闭</button>
+    </div>
+</body>
+</html>

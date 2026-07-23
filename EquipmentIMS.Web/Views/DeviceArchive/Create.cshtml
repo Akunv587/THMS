@@ -1,0 +1,65 @@
+@model EquipmentIMS.Web.Models.DeviceArchiveViewModel
+@{
+    ViewData["Title"] = Model.Id > 0 ? "编辑设备档案" : "新建设备档案";
+    var customerList = ViewData["CustomerList"] as SelectList;
+    var productList = ViewData["ProductList"] as SelectList;
+}
+
+<div class="content-card" style="max-width:720px">
+    <div class="content-header">
+        <h4>@ViewData["Title"]</h4>
+        <a asp-action="Index" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i>返回</a>
+    </div>
+
+    <form asp-action="@(Model.Id > 0 ? "Edit" : "Create")" method="post">
+        @Html.AntiForgeryToken()
+        <input type="hidden" asp-for="Id" />
+
+        <div class="row g-3">
+            <div class="col-md-6">
+                <label asp-for="CustomerId" class="form-label"></label>
+                <select asp-for="CustomerId" class="form-select" asp-items="customerList">
+                    <option value="">-- 请选择客户 --</option>
+                </select>
+                <span asp-validation-for="CustomerId" class="text-danger small"></span>
+            </div>
+            <div class="col-md-6">
+                <label asp-for="ProductId" class="form-label"></label>
+                <select asp-for="ProductId" class="form-select" asp-items="productList">
+                    <option value="">-- 请选择设备产品 --</option>
+                </select>
+                <span asp-validation-for="ProductId" class="text-danger small"></span>
+            </div>
+            <div class="col-md-6">
+                <label asp-for="SerialNo" class="form-label"></label>
+                <input asp-for="SerialNo" class="form-control" />
+                <span asp-validation-for="SerialNo" class="text-danger small"></span>
+            </div>
+            <div class="col-md-6">
+                <label asp-for="InstallDate" class="form-label"></label>
+                <input asp-for="InstallDate" type="date" class="form-control" />
+            </div>
+            <div class="col-md-6">
+                <label asp-for="WarrantyStart" class="form-label"></label>
+                <input asp-for="WarrantyStart" type="date" class="form-control" />
+            </div>
+            <div class="col-md-6">
+                <label asp-for="WarrantyEnd" class="form-label"></label>
+                <input asp-for="WarrantyEnd" type="date" class="form-control" />
+            </div>
+            <div class="col-12">
+                <label asp-for="Remark" class="form-label"></label>
+                <textarea asp-for="Remark" class="form-control" rows="2"></textarea>
+            </div>
+        </div>
+
+        <div class="mt-4">
+            <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg me-1"></i>保存</button>
+            <a asp-action="Index" class="btn btn-outline-secondary ms-2">取消</a>
+        </div>
+    </form>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

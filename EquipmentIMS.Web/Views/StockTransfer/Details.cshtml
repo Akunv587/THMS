@@ -1,0 +1,236 @@
+@model StockTransferDto
+@{
+    ViewData["Title"] = "调拨详情";
+    var isManager = ViewData["IsManager"] as bool? ?? false;
+}
+
+<div class="content-card">
+    <div class="content-header">
+        <h4><i class="bi bi-arrow-left-right me-2"></i>调拨详情</h4>
+        <div class="d-flex gap-2">
+            @if (Model.Status == 1 && isManager)
+            {
+                <button type="button" class="btn btn-success btn-sm" onclick="confirmApprove()">
+                    <i class="bi bi-check-circle me-1"></i>审批通过
+                </button>
+                <button type="button" class="btn btn-warning btn-sm" onclick="showRejectDialog()">
+                    <i class="bi bi-x-circle me-1"></i>驳回
+                </button>
+            }
+            @if (Model.Status == 2)
+            {
+                <form method="post" asp-action="Execute" asp-route-id="@Model.Id">
+                    <button type="submit" class="btn btn-primary btn-sm" onclick="return confirm('确认执行调拨？系统将自动调整调出和调入仓库库存。')">
+                        <i class="bi bi-play-circle me-1"></i>执行调拨
+                    </button>
+                </form>
+            }
+            @if (Model.Status == 0 || Model.Status == 5)
+            {
+                <form method="post" asp-action="Submit" asp-route-id="@Model.Id">
+                    <button type="submit" class="btn btn-warning btn-sm" onclick="return confirm('确认提交审批？')">
+                        <i class="bi bi-send me-1"></i>提交审批
+                    </button>
+                </form>
+            }
+            <a asp-action="Index" class="btn btn-outline-secondary btn-sm">返回列表</a>
+        </div>
+    </div>
+
+    @if (TempData["Success"] != null)
+    {
+        <div class="alert alert-success alert-dismissible fade show" role="alert">
+            @TempData["Success"]<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    }
+    @if (TempData["Error"] != null)
+    {
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            @TempData["Error"]<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    }
+
+    @* 基本信息卡片 *@
+    <div class="row mb-3">
+        <div class="col-lg-12">
+            <div class="d-flex flex-wrap gap-3 p-3 bg-light rounded">
+                <div><strong>调拨单号：</strong>@Model.TransferNo</div>
+                <div><strong>调出仓库：</strong><span class="text-danger">@Model.FromWarehouseName</span></div>
+                <div><strong>调入仓库：</strong><span class="text-success">@Model.ToWarehouseName</span></div>
+                <div><strong>调拨日期：</strong>@Model.TransferDate.ToString("yyyy-MM-dd")</div>
+                <div><strong>状态：</strong>@StatusBadge(Model.Status, Model.StatusName)</div>
+                <div><strong>操作人：</strong>@(Model.Operator ?? "-")</div>
+                @if (Model.Approver != null)
+                {
+                    <div><strong>审批人：</strong>@Model.Approver</div>
+                    <div><strong>审批时间：</strong>@(Model.ApproveTime?.ToString("yyyy-MM-dd HH:mm") ?? "-")</div>
+                }
+                @if (!string.IsNullOrWhiteSpace(Model.RejectReason))
+                {
+                    <div class="w-100"><strong class="text-danger">驳回原因：</strong>@Model.RejectReason</div>
+                }
+                @if (!string.IsNullOrWhiteSpace(Model.Remark))
+                {
+                    <div class="w-100"><strong>备注：</strong>@Model.Remark</div>
+                }
+            </div>
+        </div>
+    </div>
+
+    @* 状态流转图示 *@
+    <div class="mb-3">
+        <small class="text-muted">状态流转</small>
+        <div class="d-flex align-items-center gap-1 flex-wrap mt-1">
+            @TransferStep(0, "草稿", Model.Status)
+            <i class="bi bi-chevron-right text-muted"></i>
+            @TransferStep(1, "待审批", Model.Status)
+            <i class="bi bi-chevron-right text-muted"></i>
+            @TransferStep(2, "已审批", Model.Status)
+            <i class="bi bi-chevron-right text-muted"></i>
+            @TransferStep(3, "已完成", Model.Status)
+            @if (Model.Status == 4)
+            {
+                <span class="text-muted mx-1">→</span>
+                @TransferStep(4, "已取消", Model.Status)
+            }
+            @if (Model.Status == 5)
+            {
+                <span class="text-muted mx-1">→</span>
+                @TransferStep(5, "已驳回", Model.Status)
+            }
+        </div>
+    </div>
+
+    @* 明细表格 *@
+    <div class="table-responsive">
+        <table class="table data-table">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>设备编码</th>
+                    <th>设备名称</th>
+                    <th>调拨数量</th>
+                    <th>备注</th>
+                </tr>
+            </thead>
+            <tbody>
+                @if (!Model.Details.Any())
+                {
+                    <tr><td colspan="5" class="text-center text-muted py-4">无调拨明细</td></tr>
+                }
+                @for (int i = 0; i < Model.Details.Count; i++)
+                {
+                    var d = Model.Details[i];
+                    <tr>
+                        <td>@(i + 1)</td>
+                        <td>@d.ProductCode</td>
+                        <td>@d.ProductName</td>
+                        <td class="text-center fw-bold">@d.Qty</td>
+                        <td>@(d.Remark ?? "")</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+
+    @* 底部操作 *@
+    @if (Model.Status == 0 || Model.Status == 5)
+    {
+        <div class="d-flex gap-2 mt-3">
+            <form method="post" asp-action="Submit" asp-route-id="@Model.Id">
+                <button type="submit" class="btn btn-warning" onclick="return confirm('确认提交审批？')">
+                    <i class="bi bi-send me-1"></i>提交审批
+                </button>
+            </form>
+            <form method="post" asp-action="Cancel" asp-route-id="@Model.Id">
+                <button type="submit" class="btn btn-outline-danger" onclick="return confirm('确认取消此调拨单？')">
+                    <i class="bi bi-x-circle me-1"></i>取消调拨
+                </button>
+            </form>
+        </div>
+    }
+    @if (Model.Status == 1 && isManager)
+    {
+        <div class="d-flex gap-2 mt-3">
+            <button type="button" class="btn btn-success" onclick="confirmApprove()">
+                <i class="bi bi-check-circle me-1"></i>审批通过
+            </button>
+        </div>
+    }
+</div>
+
+@* 驳回对话框 *@
+<div class="modal fade" id="rejectModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="post" asp-action="Reject" asp-route-id="@Model.Id">
+                <div class="modal-header">
+                    <h5 class="modal-title">驳回调拨单</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">驳回原因 <span class="text-danger">*</span></label>
+                        <textarea name="reason" class="form-control" rows="3" required placeholder="请填写驳回原因"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="submit" class="btn btn-danger">确认驳回</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@functions {
+    Microsoft.AspNetCore.Html.IHtmlContent StatusBadge(int st, string? name)
+    {
+        var cls = st switch
+        {
+            0 => "bg-light text-dark",
+            1 => "bg-warning text-dark",
+            2 => "bg-info",
+            3 => "bg-success",
+            4 => "bg-secondary",
+            5 => "bg-danger",
+            _ => "bg-light text-dark"
+        };
+        return new Microsoft.AspNetCore.Html.HtmlString($"<span class=\"badge {cls}\">{name}</span>");
+    }
+
+    Microsoft.AspNetCore.Html.IHtmlContent TransferStep(int step, string label, int current)
+    {
+        var active = current == step;
+        var passed = current > step || (step == 4 && current == 4) || (step == 5 && current == 5);
+        var cls = active ? "bg-primary text-white" : passed ? "bg-success text-white" : "bg-light text-muted";
+        var width = step <= 3 ? "80px" : "72px";
+        return new Microsoft.AspNetCore.Html.HtmlString(
+            $"<span class=\"badge {cls}\" style=\"min-width:{width};padding:4px 6px;\">{label}</span>");
+    }
+}
+
+<script>
+    function confirmApprove() {
+        if (confirm('确认审批通过此调拨单？')) {
+            var form = document.createElement('form');
+            form.method = 'post';
+            form.action = '@Url.Action("Approve", new { id = Model.Id })';
+            var token = document.querySelector('input[name="__RequestVerificationToken"]');
+            if (token) {
+                var input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = '__RequestVerificationToken';
+                input.value = token.value;
+                form.appendChild(input);
+            }
+            document.body.appendChild(form);
+            form.submit();
+        }
+    }
+
+    function showRejectDialog() {
+        var modal = new bootstrap.Modal(document.getElementById('rejectModal'));
+        modal.show();
+    }
+</script>
