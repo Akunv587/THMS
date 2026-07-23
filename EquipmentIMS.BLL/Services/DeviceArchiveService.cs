@@ -32,13 +32,7 @@ public class DeviceArchiveService : IDeviceArchiveService
 
         var result = await _repo.GetPagedAsync(page, pageSize, predicate);
 
-        return new PagedResult<DeviceArchiveListDto>
-        {
-            Items = result.Items.Select(MapToListDto).ToList(),
-            TotalCount = result.TotalCount,
-            Page = result.Page,
-            PageSize = result.PageSize
-        };
+        return PagedResult<DeviceArchiveListDto>.Create(result.Items.Select(MapToListDto).ToList(), result.TotalCount, result.Page, result.PageSize);
     }
 
     public async Task<DeviceArchiveDto?> GetByIdAsync(long id)

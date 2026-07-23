@@ -1,7 +1,5 @@
-using MapsterMapper;
 using Microsoft.Extensions.DependencyInjection;
 using EquipmentIMS.BLL.Interfaces;
-using EquipmentIMS.BLL.Mappings;
 using EquipmentIMS.BLL.Services;
 
 namespace EquipmentIMS.BLL.Extensions;
@@ -73,10 +71,6 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IRoleService, RoleService>();
         services.AddScoped<IOperationLogService, OperationLogService>();
         services.AddScoped<IBackupService, BackupService>();
-
-        // Mapster 映射器
-        var adapterConfig = MappingProfile.Configure();
-        services.AddSingleton<IMapper>(new Mapper(adapterConfig));
 
         return services;
     }

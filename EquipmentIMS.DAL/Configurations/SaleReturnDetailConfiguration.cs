@@ -4,9 +4,9 @@ using EquipmentIMS.Models.Entities;
 
 namespace EquipmentIMS.DAL.Configurations;
 
-public class SaleReturnDetailConfiguration : IEntityTypeConfiguration<SaleReturnDetail>
+public class SaleReturnDetailConfiguration : BaseEntityConfiguration<SaleReturnDetail>
 {
-    public void Configure(EntityTypeBuilder<SaleReturnDetail> builder)
+    protected override void ConfigureEntity(EntityTypeBuilder<SaleReturnDetail> builder)
     {
         builder.ToTable("Sale_ReturnDetail");
         builder.HasKey(e => e.Id);
@@ -17,6 +17,5 @@ public class SaleReturnDetailConfiguration : IEntityTypeConfiguration<SaleReturn
         builder.HasOne(e => e.SaleOutDetail).WithMany().HasForeignKey(e => e.SaleOutDetailId).OnDelete(DeleteBehavior.NoAction);
         builder.HasOne(e => e.Product).WithMany().HasForeignKey(e => e.ProductId);
         builder.HasOne(e => e.Warehouse).WithMany().HasForeignKey(e => e.WarehouseId).OnDelete(DeleteBehavior.NoAction);
-        builder.HasQueryFilter(e => !e.IsDeleted);
     }
 }

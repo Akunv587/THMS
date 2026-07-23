@@ -40,13 +40,7 @@ public class ProductService : IProductService
 
         var result = await _repo.GetPagedAsync(page, pageSize, predicate);
 
-        return new PagedResult<ProductDto>
-        {
-            Items = result.Items.Select(MapToDto).ToList(),
-            TotalCount = result.TotalCount,
-            Page = result.Page,
-            PageSize = result.PageSize
-        };
+        return PagedResult<ProductDto>.Create(result.Items.Select(MapToDto).ToList(), result.TotalCount, result.Page, result.PageSize);
     }
 
     public async Task<ProductDto?> GetByIdAsync(long id)

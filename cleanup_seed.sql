@@ -1,0 +1,12 @@
+SET NOCOUNT ON;
+DELETE FROM Base_ProductStock;
+DELETE FROM Pur_PurchaseOrderDetail;
+DELETE FROM Pur_PurchaseOrder;
+DELETE FROM Sale_SaleOrderDetail;
+DELETE FROM Sale_SaleOrder;
+DELETE FROM Base_Product;
+DELETE FROM Base_Category;
+DELETE FROM Base_Supplier;
+DELETE FROM Base_Customer;
+DELETE FROM Base_Warehouse;
+SELECT 'Cleanup Done' AS Status;

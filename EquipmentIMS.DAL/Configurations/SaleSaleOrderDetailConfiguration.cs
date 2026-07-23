@@ -4,9 +4,9 @@ using EquipmentIMS.Models.Entities;
 
 namespace EquipmentIMS.DAL.Configurations;
 
-public class SaleSaleOrderDetailConfiguration : IEntityTypeConfiguration<SaleSaleOrderDetail>
+public class SaleSaleOrderDetailConfiguration : BaseEntityConfiguration<SaleSaleOrderDetail>
 {
-    public void Configure(EntityTypeBuilder<SaleSaleOrderDetail> builder)
+    protected override void ConfigureEntity(EntityTypeBuilder<SaleSaleOrderDetail> builder)
     {
         builder.ToTable("Sale_SaleOrderDetail");
         builder.HasKey(e => e.Id);
@@ -17,6 +17,5 @@ public class SaleSaleOrderDetailConfiguration : IEntityTypeConfiguration<SaleSal
         builder.HasOne(e => e.SaleOrder).WithMany(o => o.Details).HasForeignKey(e => e.SaleOrderId);
         builder.HasOne(e => e.Product).WithMany().HasForeignKey(e => e.ProductId);
         builder.HasOne(e => e.Warehouse).WithMany().HasForeignKey(e => e.WarehouseId);
-        builder.HasQueryFilter(e => !e.IsDeleted);
     }
 }

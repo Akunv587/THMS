@@ -4,9 +4,9 @@ using EquipmentIMS.Models.Entities;
 
 namespace EquipmentIMS.DAL.Configurations;
 
-public class BaseCustomerPriceConfiguration : IEntityTypeConfiguration<BaseCustomerPrice>
+public class BaseCustomerPriceConfiguration : BaseEntityConfiguration<BaseCustomerPrice>
 {
-    public void Configure(EntityTypeBuilder<BaseCustomerPrice> builder)
+    protected override void ConfigureEntity(EntityTypeBuilder<BaseCustomerPrice> builder)
     {
         builder.ToTable("Base_CustomerPrice");
         builder.HasKey(e => e.Id);
@@ -15,6 +15,5 @@ public class BaseCustomerPriceConfiguration : IEntityTypeConfiguration<BaseCusto
         builder.Property(e => e.Remark).HasMaxLength(500);
         builder.HasOne(e => e.Customer).WithMany().HasForeignKey(e => e.CustomerId);
         builder.HasOne(e => e.Product).WithMany().HasForeignKey(e => e.ProductId);
-        builder.HasQueryFilter(e => !e.IsDeleted);
     }
 }

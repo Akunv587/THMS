@@ -59,13 +59,7 @@ public class MaintenanceService : IMaintenanceService
                 CreateTime = e.CreateTime
             }).ToListAsync();
 
-        return new PagedResult<RepairOrderListDto>
-        {
-            Items = items,
-            TotalCount = total,
-            Page = page,
-            PageSize = pageSize
-        };
+        return PagedResult<RepairOrderListDto>.Create(items, total, page, pageSize);
     }
 
     public async Task<RepairOrderDto?> GetByIdAsync(long id)
@@ -101,207 +95,177 @@ public class MaintenanceService : IMaintenanceService
         return entity.Id;
     }
 
+    // ========== 工单状态流转 ==========
+
     public async Task DispatchAsync(long orderId, long technicianId, string dispatcher)
     {
-        var order = await _uow.GetRepository<MaintRepairOrder>().GetByIdAsync(orderId)
-            ?? throw new InvalidOperationException("工单不存在");
-        if (order.Status != RepairOrderStatus.PendingDispatch)
-            throw new InvalidOperationException("只有待派工的工单才能派工");
+        var order = await GetOrderAsync(orderId);
+        EnsureStatus(order, RepairOrderStatus.PendingDispatch, "只有待派工的工单才能派工");
 
         var tech = await _uow.GetRepository<SysUser>().GetByIdAsync(technicianId)
             ?? throw new InvalidOperationException("技术员不存在");
 
-        var archive = await _uow.GetRepository<MaintDeviceArchive>().GetByIdAsync(order.DeviceArchiveId);
-        if (archive != null && archive.Status == DeviceStatus.Normal)
-        {
-            archive.Status = DeviceStatus.InRepair;
-            archive.UpdateTime = DateTime.Now;
-            archive.UpdateBy = dispatcher;
-            _uow.GetRepository<MaintDeviceArchive>().Update(archive);
-        }
-
+        SetArchiveStatus(order, DeviceStatus.InRepair, dispatcher);
         order.Status = RepairOrderStatus.Dispatched;
         order.TechnicianId = technicianId;
         order.TechnicianName = tech.RealName;
         order.AssignTime = DateTime.Now;
-        order.UpdateBy = dispatcher;
-        order.UpdateTime = DateTime.Now;
-        _uow.GetRepository<MaintRepairOrder>().Update(order);
-        await _uow.SaveChangesAsync();
+        await SaveTransitionAsync(order, dispatcher);
     }
 
     public async Task StartRepairAsync(long orderId, string technician)
     {
-        var order = await _uow.GetRepository<MaintRepairOrder>().GetByIdAsync(orderId)
-            ?? throw new InvalidOperationException("工单不存在");
-        if (order.Status != RepairOrderStatus.Dispatched)
-            throw new InvalidOperationException("只有已派工的工单才能开始维修");
-
+        var order = await GetOrderAsync(orderId);
+        EnsureStatus(order, RepairOrderStatus.Dispatched, "只有已派工的工单才能开始维修");
         order.Status = RepairOrderStatus.InRepair;
         order.StartTime = DateTime.Now;
-        order.UpdateBy = technician;
-        order.UpdateTime = DateTime.Now;
-        _uow.GetRepository<MaintRepairOrder>().Update(order);
-        await _uow.SaveChangesAsync();
+        await SaveTransitionAsync(order, technician);
     }
 
     public async Task CompleteRepairAsync(long orderId, string repairDesc, decimal workHours, decimal repairCost, string technician)
     {
-        var order = await _uow.GetRepository<MaintRepairOrder>().GetByIdAsync(orderId)
-            ?? throw new InvalidOperationException("工单不存在");
-        if (order.Status != RepairOrderStatus.InRepair)
-            throw new InvalidOperationException("只有维修中的工单才能完成维修");
-
+        var order = await GetOrderAsync(orderId);
+        EnsureStatus(order, RepairOrderStatus.InRepair, "只有维修中的工单才能完成维修");
         order.Status = RepairOrderStatus.PendingConfirm;
         order.RepairDesc = repairDesc;
         order.WorkHours = workHours;
         order.RepairCost = repairCost;
         order.TotalCost = repairCost + order.PartsCost;
         order.CompleteTime = DateTime.Now;
-        order.UpdateBy = technician;
-        order.UpdateTime = DateTime.Now;
-        _uow.GetRepository<MaintRepairOrder>().Update(order);
-        await _uow.SaveChangesAsync();
+        await SaveTransitionAsync(order, technician);
     }
 
     public async Task ConfirmAsync(long orderId, string confirmer)
     {
-        var order = await _uow.GetRepository<MaintRepairOrder>().GetByIdAsync(orderId)
-            ?? throw new InvalidOperationException("工单不存在");
-        if (order.Status != RepairOrderStatus.PendingConfirm)
-            throw new InvalidOperationException("只有待确认的工单才能确认完工");
-
+        var order = await GetOrderAsync(orderId);
+        EnsureStatus(order, RepairOrderStatus.PendingConfirm, "只有待确认的工单才能确认完工");
         order.Status = RepairOrderStatus.Completed;
-        order.UpdateBy = confirmer;
-        order.UpdateTime = DateTime.Now;
-        _uow.GetRepository<MaintRepairOrder>().Update(order);
-        await _uow.SaveChangesAsync();
+        await SaveTransitionAsync(order, confirmer);
     }
 
     public async Task CloseAsync(long orderId, string user)
     {
-        var order = await _uow.GetRepository<MaintRepairOrder>().GetByIdAsync(orderId)
-            ?? throw new InvalidOperationException("工单不存在");
-        if (order.Status != RepairOrderStatus.Completed)
-            throw new InvalidOperationException("只有已完工的工单才能关闭归档");
-
-        var archive = await _uow.GetRepository<MaintDeviceArchive>().GetByIdAsync(order.DeviceArchiveId);
-        if (archive != null && archive.Status == DeviceStatus.InRepair)
-        {
-            archive.Status = DeviceStatus.Normal;
-            archive.UpdateTime = DateTime.Now;
-            archive.UpdateBy = user;
-            _uow.GetRepository<MaintDeviceArchive>().Update(archive);
-        }
-
+        var order = await GetOrderAsync(orderId);
+        EnsureStatus(order, RepairOrderStatus.Completed, "只有已完工的工单才能关闭归档");
+        SetArchiveStatus(order, DeviceStatus.Normal, user);
         order.Status = RepairOrderStatus.Closed;
-        order.UpdateBy = user;
-        order.UpdateTime = DateTime.Now;
-        _uow.GetRepository<MaintRepairOrder>().Update(order);
-        await _uow.SaveChangesAsync();
+        await SaveTransitionAsync(order, user);
     }
 
     public async Task CancelAsync(long orderId, string user)
     {
-        var order = await _uow.GetRepository<MaintRepairOrder>().GetByIdAsync(orderId)
-            ?? throw new InvalidOperationException("工单不存在");
+        var order = await GetOrderAsync(orderId);
         if (order.Status == RepairOrderStatus.Closed)
             throw new InvalidOperationException("已关闭的工单不能取消");
+        SetArchiveStatus(order, DeviceStatus.Normal, user);
+        order.Status = RepairOrderStatus.Cancelled;
+        await SaveTransitionAsync(order, user);
+    }
 
+    private async Task<MaintRepairOrder> GetOrderAsync(long orderId) =>
+        await _uow.GetRepository<MaintRepairOrder>().GetByIdAsync(orderId)
+            ?? throw new InvalidOperationException("工单不存在");
+
+    private static void EnsureStatus(MaintRepairOrder order, RepairOrderStatus expected, string message)
+    {
+        if (order.Status != expected) throw new InvalidOperationException(message);
+    }
+
+    private async void SetArchiveStatus(MaintRepairOrder order, DeviceStatus targetStatus, string user)
+    {
         var archive = await _uow.GetRepository<MaintDeviceArchive>().GetByIdAsync(order.DeviceArchiveId);
-        if (archive != null && archive.Status == DeviceStatus.InRepair)
+        if (archive != null && archive.Status != targetStatus)
         {
-            archive.Status = DeviceStatus.Normal;
+            archive.Status = targetStatus;
             archive.UpdateTime = DateTime.Now;
             archive.UpdateBy = user;
             _uow.GetRepository<MaintDeviceArchive>().Update(archive);
         }
+    }
 
-        order.Status = RepairOrderStatus.Cancelled;
+    private async Task SaveTransitionAsync(MaintRepairOrder order, string user)
+    {
         order.UpdateBy = user;
         order.UpdateTime = DateTime.Now;
         _uow.GetRepository<MaintRepairOrder>().Update(order);
         await _uow.SaveChangesAsync();
     }
 
+    // ========== 维修配件 ==========
+
     public async Task RecordRepairPartAsync(long repairOrderId, List<RepairPartDto> parts, string currentUser)
     {
-        using var tx = await _uow.BeginTransactionAsync();
         try
         {
-            var order = await _uow.GetRepository<MaintRepairOrder>().GetByIdAsync(repairOrderId)
-                ?? throw new InvalidOperationException("工单不存在");
-
-            decimal totalPartsCost = 0m;
-
-            foreach (var part in parts)
+            await _uow.ExecuteInTransactionAsync(async () =>
             {
-                if (part.Qty <= 0)
-                    throw new InvalidOperationException($"配件 {part.ProductName} 数量必须大于0");
+                var order = await _uow.GetRepository<MaintRepairOrder>().GetByIdAsync(repairOrderId)
+                    ?? throw new InvalidOperationException("工单不存在");
 
-                var stock = await _uow.Stocks.FindByProductAndWarehouseAsync(part.ProductId, part.WarehouseId)
-                    ?? throw new InvalidOperationException($"配件 [{part.ProductName}] 在所选仓库中无库存");
+                decimal totalPartsCost = 0m;
 
-                var available = stock.Quantity - stock.LockQty;
-                if (available < part.Qty)
-                    throw new InvalidOperationException($"配件 [{part.ProductName}] 可用库存不足（可用:{available}, 需要:{part.Qty}）");
-
-                stock.Quantity -= part.Qty;
-                if (stock.Quantity < 0) stock.Quantity = 0;
-                stock.UpdateTime = DateTime.Now;
-                stock.UpdateBy = currentUser;
-                _uow.GetRepository<BaseProductStock>().Update(stock);
-
-                var txn = new InvStockTransaction
+                foreach (var part in parts)
                 {
-                    TransactionNo = await _numberGen.GenerateAsync("ST", "Inv_StockTransaction", "TransactionNo"),
-                    TransactionType = TransactionType.RepairUse,
-                    ProductId = part.ProductId,
-                    WarehouseId = part.WarehouseId,
-                    Qty = -part.Qty,
-                    BalanceQty = stock.Quantity,
-                    RefType = "RepairOrder",
-                    RefId = repairOrderId,
-                    RefNo = order.OrderNo,
-                    Operator = currentUser,
-                    CreateTime = DateTime.Now,
-                    CreateBy = currentUser
-                };
-                await _uow.StockTransactions.AddAsync(txn);
+                    if (part.Qty <= 0)
+                        throw new InvalidOperationException($"配件 {part.ProductName} 数量必须大于0");
 
-                var repairPart = new MaintRepairPart
-                {
-                    RepairOrderId = repairOrderId,
-                    ProductId = part.ProductId,
-                    WarehouseId = part.WarehouseId,
-                    Qty = part.Qty,
-                    UnitPrice = part.UnitPrice,
-                    Amount = part.Qty * part.UnitPrice,
-                    CreateBy = currentUser
-                };
-                await _uow.GetRepository<MaintRepairPart>().AddAsync(repairPart);
+                    var stock = await _uow.Stocks.FindByProductAndWarehouseAsync(part.ProductId, part.WarehouseId)
+                        ?? throw new InvalidOperationException($"配件 [{part.ProductName}] 在所选仓库中无库存");
 
-                totalPartsCost += repairPart.Amount;
-            }
+                    var available = stock.Quantity - stock.LockQty;
+                    if (available < part.Qty)
+                        throw new InvalidOperationException($"配件 [{part.ProductName}] 可用库存不足（可用:{available}, 需要:{part.Qty}）");
 
-            order.PartsCost += totalPartsCost;
-            order.TotalCost = order.RepairCost + order.PartsCost;
-            order.UpdateBy = currentUser;
-            order.UpdateTime = DateTime.Now;
-            _uow.GetRepository<MaintRepairOrder>().Update(order);
+                    stock.Quantity -= part.Qty;
+                    if (stock.Quantity < 0) stock.Quantity = 0;
+                    stock.UpdateTime = DateTime.Now;
+                    stock.UpdateBy = currentUser;
+                    _uow.GetRepository<BaseProductStock>().Update(stock);
 
-            await _uow.SaveChangesAsync();
-            await tx.CommitAsync();
+                    var txn = new InvStockTransaction
+                    {
+                        TransactionNo = await _numberGen.GenerateAsync("ST", "Inv_StockTransaction", "TransactionNo"),
+                        TransactionType = TransactionType.RepairUse,
+                        ProductId = part.ProductId,
+                        WarehouseId = part.WarehouseId,
+                        Qty = -part.Qty,
+                        BalanceQty = stock.Quantity,
+                        RefType = "RepairOrder",
+                        RefId = repairOrderId,
+                        RefNo = order.OrderNo,
+                        Operator = currentUser,
+                        CreateTime = DateTime.Now,
+                        CreateBy = currentUser
+                    };
+                    await _uow.StockTransactions.AddAsync(txn);
+
+                    var repairPart = new MaintRepairPart
+                    {
+                        RepairOrderId = repairOrderId,
+                        ProductId = part.ProductId,
+                        WarehouseId = part.WarehouseId,
+                        Qty = part.Qty,
+                        UnitPrice = part.UnitPrice,
+                        Amount = part.Qty * part.UnitPrice,
+                        CreateBy = currentUser
+                    };
+                    await _uow.GetRepository<MaintRepairPart>().AddAsync(repairPart);
+
+                    totalPartsCost += repairPart.Amount;
+                }
+
+                order.PartsCost += totalPartsCost;
+                order.TotalCost = order.RepairCost + order.PartsCost;
+                order.UpdateBy = currentUser;
+                order.UpdateTime = DateTime.Now;
+                _uow.GetRepository<MaintRepairOrder>().Update(order);
+
+                await _uow.SaveChangesAsync();
+            });
         }
         catch (DbUpdateConcurrencyException)
         {
-            await tx.RollbackAsync();
             throw new InvalidOperationException("库存数据已被修改，请刷新后重试");
-        }
-        catch
-        {
-            await tx.RollbackAsync();
-            throw;
         }
     }
 
@@ -327,6 +291,8 @@ public class MaintenanceService : IMaintenanceService
             Remark = p.Remark
         }).ToList();
     }
+
+    // ========== 辅助映射 ==========
 
     private static string GetStatusName(RepairOrderStatus s) => s switch
     {
@@ -413,13 +379,7 @@ public class MaintenanceService : IMaintenanceService
                 CreateTime = e.CreateTime
             }).ToListAsync();
 
-        return new PagedResult<MaintenancePlanListDto>
-        {
-            Items = items,
-            TotalCount = total,
-            Page = page,
-            PageSize = pageSize
-        };
+        return PagedResult<MaintenancePlanListDto>.Create(items, total, page, pageSize);
     }
 
     public async Task<List<MaintenancePlanDto>> GetPlansByDeviceAsync(long deviceId)

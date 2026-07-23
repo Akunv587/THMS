@@ -56,15 +56,9 @@ public class UserService : IUserService
 
         var roleDict = userRoles.GroupBy(x => x.UserId).ToDictionary(g => g.Key, g => g.Select(x => x.RoleName).ToList());
         foreach (var user in users)
-            user.Roles = roleDict.GetValueOrDefault(user.Id, new List<string>());
+            user.Roles = roleDict.GetValueOrDefault(user.Id, []);
 
-        return new PagedResult<UserListDto>
-        {
-            Items = users,
-            TotalCount = total,
-            Page = query.Page,
-            PageSize = query.PageSize
-        };
+        return PagedResult<UserListDto>.Create(users, total, query.Page, query.PageSize);
     }
 
     public async Task<UserCreateEditDto?> GetByIdAsync(long id)

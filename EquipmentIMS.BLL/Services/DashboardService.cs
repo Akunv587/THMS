@@ -32,7 +32,7 @@ public class DashboardService : IDashboardService
         var monthlySales = await _context.InvStockTransactions
             .Where(t => t.TransactionType == TransactionType.SaleOut && t.CreateTime >= monthStart)
             .Include(t => t.Product)
-            .SumAsync(t => t.Qty * t.Product.SalePrice);
+            .SumAsync(t => -t.Qty * t.Product.SalePrice);
 
         var monthlyPurchase = await _context.InvStockTransactions
             .Where(t => t.TransactionType == TransactionType.PurchaseIn && t.CreateTime >= monthStart)
@@ -80,7 +80,7 @@ public class DashboardService : IDashboardService
                 .Where(t => t.TransactionType == TransactionType.SaleOut
                     && t.CreateTime >= monthStart && t.CreateTime < monthEnd)
                 .Include(t => t.Product)
-                .SumAsync(t => t.Qty * t.Product.SalePrice);
+                .SumAsync(t => -t.Qty * t.Product.SalePrice);
 
             result.Months.Add($"{monthStart.Year}-{monthStart.Month:D2}");
             result.Amounts.Add(amount);
@@ -111,7 +111,7 @@ public class DashboardService : IDashboardService
 
     public async Task<List<PendingApprovalItem>> GetPendingApprovalsAsync()
     {
-        var items = new List<PendingApprovalItem>();
+        List<PendingApprovalItem> items = [];
 
         var purchaseOrders = await _context.PurPurchaseOrders
             .Where(o => !o.IsDeleted && o.Status == PurchaseOrderStatus.PendingApproval)

@@ -4,9 +4,9 @@ using EquipmentIMS.Models.Entities;
 
 namespace EquipmentIMS.DAL.Configurations;
 
-public class MaintDeviceArchiveConfiguration : IEntityTypeConfiguration<MaintDeviceArchive>
+public class MaintDeviceArchiveConfiguration : BaseEntityConfiguration<MaintDeviceArchive>
 {
-    public void Configure(EntityTypeBuilder<MaintDeviceArchive> builder)
+    protected override void ConfigureEntity(EntityTypeBuilder<MaintDeviceArchive> builder)
     {
         builder.ToTable("Maint_DeviceArchive");
         builder.HasKey(e => e.Id);
@@ -17,6 +17,5 @@ public class MaintDeviceArchiveConfiguration : IEntityTypeConfiguration<MaintDev
         builder.HasOne(e => e.Product).WithMany().HasForeignKey(e => e.ProductId);
         builder.HasOne(e => e.Customer).WithMany().HasForeignKey(e => e.CustomerId);
         builder.HasOne(e => e.SaleOrder).WithMany().HasForeignKey(e => e.SaleOrderId);
-        builder.HasQueryFilter(e => !e.IsDeleted);
     }
 }

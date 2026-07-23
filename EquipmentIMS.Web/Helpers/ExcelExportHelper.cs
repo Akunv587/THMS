@@ -256,7 +256,7 @@ public static class ExcelExportHelper
     private static byte[] WriteToBytes(XSSFWorkbook wb)
     {
         using var ms = new MemoryStream();
-        wb.Write(ms, leaveOpen: false);
+        wb.Write(ms, leaveOpen: true);
         return ms.ToArray();
     }
 }

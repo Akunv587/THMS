@@ -4,9 +4,9 @@ using EquipmentIMS.Models.Entities;
 
 namespace EquipmentIMS.DAL.Configurations;
 
-public class PurPurchaseOrderDetailConfiguration : IEntityTypeConfiguration<PurPurchaseOrderDetail>
+public class PurPurchaseOrderDetailConfiguration : BaseEntityConfiguration<PurPurchaseOrderDetail>
 {
-    public void Configure(EntityTypeBuilder<PurPurchaseOrderDetail> builder)
+    protected override void ConfigureEntity(EntityTypeBuilder<PurPurchaseOrderDetail> builder)
     {
         builder.ToTable("Pur_PurchaseOrderDetail");
         builder.HasKey(e => e.Id);
@@ -16,6 +16,5 @@ public class PurPurchaseOrderDetailConfiguration : IEntityTypeConfiguration<PurP
         builder.Property(e => e.Remark).HasMaxLength(200);
         builder.HasOne(e => e.PurchaseOrder).WithMany(o => o.Details).HasForeignKey(e => e.PurchaseOrderId);
         builder.HasOne(e => e.Product).WithMany().HasForeignKey(e => e.ProductId);
-        builder.HasQueryFilter(e => !e.IsDeleted);
     }
 }

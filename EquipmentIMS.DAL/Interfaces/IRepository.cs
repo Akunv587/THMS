@@ -10,7 +10,6 @@ namespace EquipmentIMS.DAL.Interfaces;
 public interface IRepository<T> where T : BaseEntity
 {
     Task<T?> GetByIdAsync(long id);
-    Task<IEnumerable<T>> GetAllAsync();
     Task<IEnumerable<T>> FindAsync(Expression<Func<T, bool>> predicate);
     IQueryable<T> Query();
     Task<PagedResult<T>> GetPagedAsync(int page, int pageSize, Expression<Func<T, bool>>? predicate = null);

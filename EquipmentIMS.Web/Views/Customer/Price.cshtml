@@ -121,7 +121,7 @@
             if (!data.productId) { showError('请选择设备'); return; }
             if (data.salePrice <= 0) { showError('销售价必须大于0'); return; }
 
-            ajaxPost('/Customer/SetPrice', data, function () {
+            ajaxPostJson('/Customer/SetPrice', data, function () {
                 priceModal.hide();
                 location.reload();
             });

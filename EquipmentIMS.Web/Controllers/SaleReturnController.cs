@@ -1,7 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using EquipmentIMS.BLL.Interfaces;
 using EquipmentIMS.Models.DTOs;
-using EquipmentIMS.Models.Enums;
 using EquipmentIMS.Models.Exceptions;
 using EquipmentIMS.Web.Filters;
 using EquipmentIMS.Web.Models;

@@ -56,9 +56,7 @@ public class StockService : IStockService
             .Skip((page - 1) * pageSize).Take(pageSize)
             .ToListAsync();
 
-        return new PagedResult<StockQueryDto>
-        {
-            Items = items.Select(s => new StockQueryDto
+        return PagedResult<StockQueryDto>.Create(items.Select(s => new StockQueryDto
             {
                 ProductId = s.ProductId,
                 ProductCode = s.Product?.Code ?? "",
@@ -73,11 +71,7 @@ public class StockService : IStockService
                 AvailableQty = s.Quantity - s.LockQty,
                 MinStock = s.Product?.MinStock ?? 0,
                 WarningLevel = s.Product != null && s.Product.MinStock > 0 && s.Quantity <= s.Product.MinStock ? "低库存" : "正常"
-            }).ToList(),
-            TotalCount = total,
-            Page = page,
-            PageSize = pageSize
-        };
+            }).ToList(), total, page, pageSize);
     }
 
     // ==================== 库存查询（含缓存） ====================
@@ -123,9 +117,7 @@ public class StockService : IStockService
             .Skip((query.Page - 1) * query.PageSize).Take(query.PageSize)
             .ToListAsync();
 
-        return new PagedResult<StockListDto>
-        {
-            Items = items.Select(s => new StockListDto
+        return PagedResult<StockListDto>.Create(items.Select(s => new StockListDto
             {
                 ProductId = s.ProductId,
                 ProductCode = s.Product?.Code ?? "",
@@ -141,11 +133,7 @@ public class StockService : IStockService
                 AvailableQty = s.Quantity - s.LockQty,
                 MinStock = s.Product?.MinStock ?? 0,
                 WarningLevel = s.Product != null && s.Product.MinStock > 0 && s.Quantity <= s.Product.MinStock ? "低库存" : "正常"
-            }).ToList(),
-            TotalCount = total,
-            Page = query.Page,
-            PageSize = query.PageSize
-        };
+            }).ToList(), total, query.Page, query.PageSize);
     }
 
     // ==================== 库存流水 ====================
@@ -162,7 +150,7 @@ public class StockService : IStockService
                 .Where(p => p.Code.Contains(query.Keyword) || p.Name.Contains(query.Keyword))
                 .Select(p => p.Id).ToListAsync();
             if (keywordProductIds.Count == 0)
-                return new PagedResult<StockTransactionDto> { Page = query.Page, PageSize = query.PageSize };
+                return PagedResult<StockTransactionDto>.Create([], 0, query.Page, query.PageSize);
         }
 
         // 合并 productId 和 keyword 结果
@@ -197,9 +185,7 @@ public class StockService : IStockService
         var warehouses = await _uow.GetRepository<BaseWarehouse>().Query()
             .Where(w => warehouseIds.Contains(w.Id)).ToListAsync();
 
-        return new PagedResult<StockTransactionDto>
-        {
-            Items = paged.Select(t =>
+        return PagedResult<StockTransactionDto>.Create(paged.Select(t =>
             {
                 var p = products.FirstOrDefault(x => x.Id == t.ProductId);
                 var w = warehouses.FirstOrDefault(x => x.Id == t.WarehouseId);
@@ -223,11 +209,7 @@ public class StockService : IStockService
                     Remark = t.Remark,
                     CreateTime = t.CreateTime
                 };
-            }).ToList(),
-            TotalCount = total,
-            Page = query.Page,
-            PageSize = query.PageSize
-        };
+            }).ToList(), total, query.Page, query.PageSize);
     }
 
     // ==================== 导出 ====================
@@ -339,7 +321,7 @@ public class StockService : IStockService
         for (int i = 0; i < headers.Length; i++)
             sheet.SetColumnWidth(i, 5000);
 
-        workbook.Write(stream, leaveOpen: false);
+        workbook.Write(stream, leaveOpen: true);
         return stream.ToArray();
     }
 
@@ -470,75 +452,73 @@ public class StockService : IStockService
         var result = new InitialImportResultDto();
         var batchNo = $"INIT-{DateTime.Now:yyyyMMdd}";
 
-        await using var tx = await _uow.BeginTransactionAsync();
         try
         {
-            var stockRepo = _uow.GetRepository<BaseProductStock>();
-
-            foreach (var item in items)
+            await _uow.ExecuteInTransactionAsync(async () =>
             {
-                var key = $"{item.ProductCode} / {item.WarehouseName}";
+                var stockRepo = _uow.GetRepository<BaseProductStock>();
 
-                try
+                foreach (var item in items)
                 {
-                    var existing = await _uow.Stocks.FindByProductAndWarehouseAsync(item.ProductId, item.WarehouseId);
-                    if (existing != null)
-                        throw new BusinessException($"设备'{item.ProductCode}'在仓库已有库存，不允许重复导入", "STOCK_EXISTS");
+                    var key = $"{item.ProductCode} / {item.WarehouseName}";
 
-                    var stock = new BaseProductStock
+                    try
                     {
-                        ProductId = item.ProductId,
-                        WarehouseId = item.WarehouseId,
-                        Quantity = item.Quantity,
-                        LockQty = 0,
-                        CreateBy = currentUser,
-                        CreateTime = DateTime.Now
-                    };
-                    await stockRepo.AddAsync(stock);
-                    await _uow.SaveChangesAsync();
+                        var existing = await _uow.Stocks.FindByProductAndWarehouseAsync(item.ProductId, item.WarehouseId);
+                        if (existing != null)
+                            throw new BusinessException($"设备'{item.ProductCode}'在仓库已有库存，不允许重复导入", "STOCK_EXISTS");
 
-                    await _uow.StockTransactions.AddAsync(new InvStockTransaction
+                        var stock = new BaseProductStock
+                        {
+                            ProductId = item.ProductId,
+                            WarehouseId = item.WarehouseId,
+                            Quantity = item.Quantity,
+                            LockQty = 0,
+                            CreateBy = currentUser,
+                            CreateTime = DateTime.Now
+                        };
+                        await stockRepo.AddAsync(stock);
+                        await _uow.SaveChangesAsync();
+
+                        await _uow.StockTransactions.AddAsync(new InvStockTransaction
+                        {
+                            TransactionNo = await _numberGen.GenerateWithTimeAsync("TXN", "Inv_StockTransaction", "TransactionNo"),
+                            TransactionType = TransactionType.InitialImport,
+                            ProductId = item.ProductId,
+                            WarehouseId = item.WarehouseId,
+                            Qty = item.Quantity,
+                            BalanceQty = item.Quantity,
+                            RefType = "InitialImport",
+                            RefNo = batchNo,
+                            Operator = currentUser,
+                            Remark = $"期初库存导入 {batchNo}",
+                            CreateBy = currentUser,
+                            CreateTime = DateTime.Now
+                        });
+
+                        result.SuccessCount++;
+                    }
+                    catch (BusinessException ex)
                     {
-                        TransactionNo = await _numberGen.GenerateWithTimeAsync("TXN", "Inv_StockTransaction", "TransactionNo"),
-                        TransactionType = TransactionType.InitialImport,
-                        ProductId = item.ProductId,
-                        WarehouseId = item.WarehouseId,
-                        Qty = item.Quantity,
-                        BalanceQty = item.Quantity,
-                        RefType = "InitialImport",
-                        RefNo = batchNo,
-                        Operator = currentUser,
-                        Remark = $"期初库存导入 {batchNo}",
-                        CreateBy = currentUser,
-                        CreateTime = DateTime.Now
-                    });
-
-                    result.SuccessCount++;
+                        result.FailCount++;
+                        result.FailItems.Add($"{key}: {ex.Message}");
+                    }
                 }
-                catch (BusinessException ex)
+
+                // 部分失败时全部回滚
+                if (result.FailCount > 0)
                 {
-                    result.FailCount++;
-                    result.FailItems.Add($"{key}: {ex.Message}");
+                    result.SuccessCount = 0;
+                    throw new BusinessException($"导入失败，{result.FailCount}条数据校验不通过", "IMPORT_VALIDATION_ERROR");
                 }
-            }
 
-            // 部分失败时全部回滚
-            if (result.FailCount > 0)
-            {
-                await tx.RollbackAsync();
-                result.SuccessCount = 0;
-                result.Message = $"导入失败，{result.FailCount}条数据校验不通过";
-                return result;
-            }
-
-            await _uow.SaveChangesAsync();
-            await tx.CommitAsync();
-            InvalidateStockCache();
-            result.Message = $"期初库存导入成功，共{result.SuccessCount}条记录（批次号：{batchNo}）";
+                await _uow.SaveChangesAsync();
+                InvalidateStockCache();
+                result.Message = $"期初库存导入成功，共{result.SuccessCount}条记录（批次号：{batchNo}）";
+            });
         }
         catch (DbUpdateConcurrencyException)
         {
-            await tx.RollbackAsync();
             throw new BusinessException("库存数据已被他人修改，请刷新后重试", "STOCK_CONFLICT");
         }
 
@@ -586,9 +566,7 @@ public class StockService : IStockService
             .Take(query.PageSize)
             .ToListAsync();
 
-        return new PagedResult<StockCheckListDto>
-        {
-            Items = items.Select(c => new StockCheckListDto
+        return PagedResult<StockCheckListDto>.Create(items.Select(c => new StockCheckListDto
             {
                 Id = c.Id,
                 CheckNo = c.CheckNo,
@@ -602,11 +580,7 @@ public class StockService : IStockService
                 TotalDiffAmount = c.TotalDiffAmount,
                 Operator = c.Operator,
                 CreateTime = c.CreateTime
-            }).ToList(),
-            TotalCount = total,
-            Page = query.Page,
-            PageSize = query.PageSize
-        };
+            }).ToList(), total, query.Page, query.PageSize);
     }
 
     public async Task<long> CreateCheckAsync(StockCheckCreateDto dto, string currentUser)
@@ -761,96 +735,91 @@ public class StockService : IStockService
 
     public async Task AdjustStockCheckAsync(long checkId, string approver)
     {
-        using var tx = await _uow.BeginTransactionAsync();
         try
         {
-            var check = await _uow.GetRepository<InvStockCheck>().Query()
-                .Include(c => c.Details).ThenInclude(d => d.Product)
-                .FirstOrDefaultAsync(c => c.Id == checkId && !c.IsDeleted)
-                ?? throw new BusinessException("盘点单不存在", "CHECK_NOT_FOUND");
-
-            if (check.Status != StockCheckStatus.PendingApproval)
-                throw new BusinessException($"当前状态【{GetCheckStatusName(check.Status)}】不允许审批", "CHECK_STATUS_INVALID");
-
-            var stockRepo = _uow.GetRepository<BaseProductStock>();
-            var txnRepo = _uow.StockTransactions;
-            var detailRepo = _uow.GetRepository<InvStockCheckDetail>();
-
-            var diffs = check.Details.Where(d => d.DiffQty != 0).ToList();
-            foreach (var d in diffs)
+            await _uow.ExecuteInTransactionAsync(async () =>
             {
-                var stock = await _uow.Stocks.FindByProductAndWarehouseAsync(d.ProductId, check.WarehouseId)
-                    ?? new BaseProductStock
+                var check = await _uow.GetRepository<InvStockCheck>().Query()
+                    .Include(c => c.Details).ThenInclude(d => d.Product)
+                    .FirstOrDefaultAsync(c => c.Id == checkId && !c.IsDeleted)
+                    ?? throw new BusinessException("盘点单不存在", "CHECK_NOT_FOUND");
+
+                if (check.Status != StockCheckStatus.PendingApproval)
+                    throw new BusinessException($"当前状态【{GetCheckStatusName(check.Status)}】不允许审批", "CHECK_STATUS_INVALID");
+
+                var stockRepo = _uow.GetRepository<BaseProductStock>();
+                var txnRepo = _uow.StockTransactions;
+                var detailRepo = _uow.GetRepository<InvStockCheckDetail>();
+
+                var diffs = check.Details.Where(d => d.DiffQty != 0).ToList();
+                foreach (var d in diffs)
+                {
+                    var stock = await _uow.Stocks.FindByProductAndWarehouseAsync(d.ProductId, check.WarehouseId)
+                        ?? new BaseProductStock
+                        {
+                            ProductId = d.ProductId,
+                            WarehouseId = check.WarehouseId,
+                            Quantity = 0,
+                            LockQty = 0,
+                            CreateTime = DateTime.Now,
+                            CreateBy = approver
+                        };
+
+                    stock.Quantity += d.DiffQty;
+                    if (stock.Quantity < 0)
+                        throw new BusinessException(
+                            $"设备 [{d.Product?.Code ?? d.ProductId.ToString()}] 盘亏后库存为负（系统:{d.SystemQty}, 实盘:{d.ActualQty}），操作中止",
+                            "STOCK_NEGATIVE");
+
+                    stock.UpdateTime = DateTime.Now;
+                    stock.UpdateBy = approver;
+
+                    if (stock.Id == 0)
+                        await stockRepo.AddAsync(stock);
+                    else
+                        stockRepo.Update(stock);
+
+                    var isGain = d.DiffQty > 0;
+                    await txnRepo.AddAsync(new InvStockTransaction
                     {
+                        TransactionNo = await _numberGen.GenerateWithTimeAsync("TXN", "Inv_StockTransaction", "TransactionNo"),
+                        TransactionType = isGain ? TransactionType.StockGain : TransactionType.StockLoss,
                         ProductId = d.ProductId,
                         WarehouseId = check.WarehouseId,
-                        Quantity = 0,
-                        LockQty = 0,
+                        Qty = d.DiffQty,
+                        BalanceQty = stock.Quantity,
+                        RefType = "StockCheck",
+                        RefId = check.Id,
+                        RefNo = check.CheckNo,
+                        Operator = approver,
+                        Remark = $"盘点{(isGain ? "盘盈" : "盘亏")}（系统:{d.SystemQty}, 实盘:{d.ActualQty}, 差异:{d.DiffQty}）",
                         CreateTime = DateTime.Now,
                         CreateBy = approver
-                    };
+                    });
+                }
 
-                stock.Quantity += d.DiffQty;
-                if (stock.Quantity < 0)
-                    throw new BusinessException(
-                        $"设备 [{d.Product?.Code ?? d.ProductId.ToString()}] 盘亏后库存为负（系统:{d.SystemQty}, 实盘:{d.ActualQty}），操作中止",
-                        "STOCK_NEGATIVE");
-
-                stock.UpdateTime = DateTime.Now;
-                stock.UpdateBy = approver;
-
-                if (stock.Id == 0)
-                    await stockRepo.AddAsync(stock);
-                else
-                    stockRepo.Update(stock);
-
-                var isGain = d.DiffQty > 0;
-                await txnRepo.AddAsync(new InvStockTransaction
+                // 更新系统快照 + 解冻
+                foreach (var d in check.Details)
                 {
-                    TransactionNo = await _numberGen.GenerateWithTimeAsync("TXN", "Inv_StockTransaction", "TransactionNo"),
-                    TransactionType = isGain ? TransactionType.StockGain : TransactionType.StockLoss,
-                    ProductId = d.ProductId,
-                    WarehouseId = check.WarehouseId,
-                    Qty = d.DiffQty,
-                    BalanceQty = stock.Quantity,
-                    RefType = "StockCheck",
-                    RefId = check.Id,
-                    RefNo = check.CheckNo,
-                    Operator = approver,
-                    Remark = $"盘点{(isGain ? "盘盈" : "盘亏")}（系统:{d.SystemQty}, 实盘:{d.ActualQty}, 差异:{d.DiffQty}）",
-                    CreateTime = DateTime.Now,
-                    CreateBy = approver
-                });
-            }
+                    d.SystemQty = d.ActualQty ?? d.SystemQty;
+                    d.UpdateTime = DateTime.Now;
+                    d.UpdateBy = approver;
+                    detailRepo.Update(d);
+                }
 
-            // 更新系统快照 + 解冻
-            foreach (var d in check.Details)
-            {
-                d.SystemQty = d.ActualQty ?? d.SystemQty;
-                d.UpdateTime = DateTime.Now;
-                d.UpdateBy = approver;
-                detailRepo.Update(d);
-            }
+                check.IsLocked = false;
+                check.Status = StockCheckStatus.Approved;
+                check.Approver = approver;
+                check.ApproveTime = DateTime.Now;
+                check.UpdateTime = DateTime.Now;
+                check.UpdateBy = approver;
 
-            check.IsLocked = false;
-            check.Status = StockCheckStatus.Approved;
-            check.Approver = approver;
-            check.ApproveTime = DateTime.Now;
-            check.UpdateTime = DateTime.Now;
-            check.UpdateBy = approver;
-
-            await _uow.SaveChangesAsync();
-            await tx.CommitAsync();
-            InvalidateStockCache();
-        }
-        catch (BusinessException)
-        {
-            await tx.RollbackAsync();
-            throw;
+                await _uow.SaveChangesAsync();
+                InvalidateStockCache();
+            });
         }
         catch (DbUpdateConcurrencyException)
         {
-            await tx.RollbackAsync();
             throw new BusinessException("库存数据已被他人修改，请刷新后重试", "STOCK_CONFLICT");
         }
     }
@@ -913,9 +882,7 @@ public class StockService : IStockService
             .Take(query.PageSize)
             .ToListAsync();
 
-        return new PagedResult<StockTransferListDto>
-        {
-            Items = items.Select(t => new StockTransferListDto
+        return PagedResult<StockTransferListDto>.Create(items.Select(t => new StockTransferListDto
             {
                 Id = t.Id,
                 TransferNo = t.TransferNo,
@@ -928,11 +895,7 @@ public class StockService : IStockService
                 TotalQty = t.Details.Sum(d => d.Qty),
                 Operator = t.Operator,
                 CreateTime = t.CreateTime
-            }).ToList(),
-            TotalCount = total,
-            Page = query.Page,
-            PageSize = query.PageSize
-        };
+            }).ToList(), total, query.Page, query.PageSize);
     }
 
     public async Task<long> CreateTransferAsync(StockTransferCreateDto dto, string currentUser)
@@ -1084,122 +1047,117 @@ public class StockService : IStockService
 
     public async Task ExecuteTransferAsync(long transferId, string user)
     {
-        using var tx = await _uow.BeginTransactionAsync();
         try
         {
-            var transfer = await _uow.GetRepository<InvStockTransfer>().Query()
-                .Include(t => t.Details).ThenInclude(d => d.Product)
-                .FirstOrDefaultAsync(t => t.Id == transferId && !t.IsDeleted)
-                ?? throw new BusinessException("调拨单不存在", "TRANSFER_NOT_FOUND");
-
-            if (transfer.Status != TransferStatus.Approved)
-                throw new BusinessException($"当前状态【{GetTransferStatusName(transfer.Status)}】不允许执行调拨", "TRANSFER_STATUS_INVALID");
-
-            // 校验调出仓库是否有正在盘点的设备
-            var productIds = transfer.Details.Select(d => d.ProductId).ToList();
-            var hasActiveCheck = await _uow.GetRepository<InvStockCheckDetail>().Query()
-                .AnyAsync(d => productIds.Contains(d.ProductId) && !d.IsDeleted
-                    && d.StockCheck != null && d.StockCheck.IsLocked && !d.StockCheck.IsDeleted);
-            if (hasActiveCheck)
-                throw new BusinessException("调出仓库中存在正在盘点的设备，无法执行调拨", "CHECK_IN_PROGRESS");
-
-            var stockRepo = _uow.GetRepository<BaseProductStock>();
-            var txnRepo = _uow.StockTransactions;
-
-            foreach (var detail in transfer.Details)
+            await _uow.ExecuteInTransactionAsync(async () =>
             {
-                // 调出仓库：校验可用库存 → 扣减
-                var fromStock = await _uow.Stocks.FindByProductAndWarehouseAsync(detail.ProductId, transfer.FromWarehouseId)
-                    ?? throw new BusinessException(
-                        $"设备 [{detail.Product?.Code ?? detail.ProductId.ToString()}] 在调出仓库无库存记录", "NO_STOCK");
+                var transfer = await _uow.GetRepository<InvStockTransfer>().Query()
+                    .Include(t => t.Details).ThenInclude(d => d.Product)
+                    .FirstOrDefaultAsync(t => t.Id == transferId && !t.IsDeleted)
+                    ?? throw new BusinessException("调拨单不存在", "TRANSFER_NOT_FOUND");
 
-                var availableQty = fromStock.Quantity - fromStock.LockQty;
-                if (availableQty < detail.Qty)
-                    throw new BusinessException(
-                        $"设备 [{detail.Product?.Code ?? detail.ProductId.ToString()}] 可用库存不足（可用:{availableQty}, 需要:{detail.Qty}）",
-                        "STOCK_INSUFFICIENT");
+                if (transfer.Status != TransferStatus.Approved)
+                    throw new BusinessException($"当前状态【{GetTransferStatusName(transfer.Status)}】不允许执行调拨", "TRANSFER_STATUS_INVALID");
 
-                fromStock.Quantity -= detail.Qty;
-                if (fromStock.Quantity < 0)
-                    throw new BusinessException(
-                        $"设备 [{detail.Product?.Code ?? detail.ProductId.ToString()}] 调拨后库存为负，操作中止",
-                        "STOCK_NEGATIVE");
-                fromStock.UpdateTime = DateTime.Now;
-                fromStock.UpdateBy = user;
-                stockRepo.Update(fromStock);
+                // 校验调出仓库是否有正在盘点的设备
+                var productIds = transfer.Details.Select(d => d.ProductId).ToList();
+                var hasActiveCheck = await _uow.GetRepository<InvStockCheckDetail>().Query()
+                    .AnyAsync(d => productIds.Contains(d.ProductId) && !d.IsDeleted
+                        && d.StockCheck != null && d.StockCheck.IsLocked && !d.StockCheck.IsDeleted);
+                if (hasActiveCheck)
+                    throw new BusinessException("调出仓库中存在正在盘点的设备，无法执行调拨", "CHECK_IN_PROGRESS");
 
-                await txnRepo.AddAsync(new InvStockTransaction
+                var stockRepo = _uow.GetRepository<BaseProductStock>();
+                var txnRepo = _uow.StockTransactions;
+
+                foreach (var detail in transfer.Details)
                 {
-                    TransactionNo = await _numberGen.GenerateWithTimeAsync("TXN", "Inv_StockTransaction", "TransactionNo"),
-                    TransactionType = TransactionType.TransferOut,
-                    ProductId = detail.ProductId,
-                    WarehouseId = transfer.FromWarehouseId,
-                    Qty = -detail.Qty,
-                    BalanceQty = fromStock.Quantity,
-                    RefType = "StockTransfer",
-                    RefId = transfer.Id,
-                    RefNo = transfer.TransferNo,
-                    Operator = user,
-                    Remark = $"调拨至 [{transfer.ToWarehouse?.Name ?? transfer.ToWarehouseId.ToString()}]",
-                    CreateTime = DateTime.Now,
-                    CreateBy = user
-                });
+                    // 调出仓库：校验可用库存 → 扣减
+                    var fromStock = await _uow.Stocks.FindByProductAndWarehouseAsync(detail.ProductId, transfer.FromWarehouseId)
+                        ?? throw new BusinessException(
+                            $"设备 [{detail.Product?.Code ?? detail.ProductId.ToString()}] 在调出仓库无库存记录", "NO_STOCK");
 
-                // 调入仓库：查找或创建库存 → 增加
-                var toStock = await _uow.Stocks.FindByProductAndWarehouseAsync(detail.ProductId, transfer.ToWarehouseId)
-                    ?? new BaseProductStock
+                    var availableQty = fromStock.Quantity - fromStock.LockQty;
+                    if (availableQty < detail.Qty)
+                        throw new BusinessException(
+                            $"设备 [{detail.Product?.Code ?? detail.ProductId.ToString()}] 可用库存不足（可用:{availableQty}, 需要:{detail.Qty}）",
+                            "STOCK_INSUFFICIENT");
+
+                    fromStock.Quantity -= detail.Qty;
+                    if (fromStock.Quantity < 0)
+                        throw new BusinessException(
+                            $"设备 [{detail.Product?.Code ?? detail.ProductId.ToString()}] 调拨后库存为负，操作中止",
+                            "STOCK_NEGATIVE");
+                    fromStock.UpdateTime = DateTime.Now;
+                    fromStock.UpdateBy = user;
+                    stockRepo.Update(fromStock);
+
+                    await txnRepo.AddAsync(new InvStockTransaction
                     {
+                        TransactionNo = await _numberGen.GenerateWithTimeAsync("TXN", "Inv_StockTransaction", "TransactionNo"),
+                        TransactionType = TransactionType.TransferOut,
                         ProductId = detail.ProductId,
-                        WarehouseId = transfer.ToWarehouseId,
-                        Quantity = 0,
-                        LockQty = 0,
+                        WarehouseId = transfer.FromWarehouseId,
+                        Qty = -detail.Qty,
+                        BalanceQty = fromStock.Quantity,
+                        RefType = "StockTransfer",
+                        RefId = transfer.Id,
+                        RefNo = transfer.TransferNo,
+                        Operator = user,
+                        Remark = $"调拨至 [{transfer.ToWarehouse?.Name ?? transfer.ToWarehouseId.ToString()}]",
                         CreateTime = DateTime.Now,
                         CreateBy = user
-                    };
+                    });
 
-                toStock.Quantity += detail.Qty;
-                toStock.UpdateTime = DateTime.Now;
-                toStock.UpdateBy = user;
+                    // 调入仓库：查找或创建库存 → 增加
+                    var toStock = await _uow.Stocks.FindByProductAndWarehouseAsync(detail.ProductId, transfer.ToWarehouseId)
+                        ?? new BaseProductStock
+                        {
+                            ProductId = detail.ProductId,
+                            WarehouseId = transfer.ToWarehouseId,
+                            Quantity = 0,
+                            LockQty = 0,
+                            CreateTime = DateTime.Now,
+                            CreateBy = user
+                        };
 
-                if (toStock.Id == 0)
-                    await stockRepo.AddAsync(toStock);
-                else
-                    stockRepo.Update(toStock);
+                    toStock.Quantity += detail.Qty;
+                    toStock.UpdateTime = DateTime.Now;
+                    toStock.UpdateBy = user;
 
-                await txnRepo.AddAsync(new InvStockTransaction
-                {
-                    TransactionNo = await _numberGen.GenerateWithTimeAsync("TXN", "Inv_StockTransaction", "TransactionNo"),
-                    TransactionType = TransactionType.TransferIn,
-                    ProductId = detail.ProductId,
-                    WarehouseId = transfer.ToWarehouseId,
-                    Qty = detail.Qty,
-                    BalanceQty = toStock.Quantity,
-                    RefType = "StockTransfer",
-                    RefId = transfer.Id,
-                    RefNo = transfer.TransferNo,
-                    Operator = user,
-                    Remark = $"从 [{transfer.FromWarehouse?.Name ?? transfer.FromWarehouseId.ToString()}] 调入",
-                    CreateTime = DateTime.Now,
-                    CreateBy = user
-                });
-            }
+                    if (toStock.Id == 0)
+                        await stockRepo.AddAsync(toStock);
+                    else
+                        stockRepo.Update(toStock);
 
-            transfer.Status = TransferStatus.Completed;
-            transfer.UpdateTime = DateTime.Now;
-            transfer.UpdateBy = user;
+                    await txnRepo.AddAsync(new InvStockTransaction
+                    {
+                        TransactionNo = await _numberGen.GenerateWithTimeAsync("TXN", "Inv_StockTransaction", "TransactionNo"),
+                        TransactionType = TransactionType.TransferIn,
+                        ProductId = detail.ProductId,
+                        WarehouseId = transfer.ToWarehouseId,
+                        Qty = detail.Qty,
+                        BalanceQty = toStock.Quantity,
+                        RefType = "StockTransfer",
+                        RefId = transfer.Id,
+                        RefNo = transfer.TransferNo,
+                        Operator = user,
+                        Remark = $"从 [{transfer.FromWarehouse?.Name ?? transfer.FromWarehouseId.ToString()}] 调入",
+                        CreateTime = DateTime.Now,
+                        CreateBy = user
+                    });
+                }
 
-            await _uow.SaveChangesAsync();
-            await tx.CommitAsync();
-            InvalidateStockCache();
-        }
-        catch (BusinessException)
-        {
-            await tx.RollbackAsync();
-            throw;
+                transfer.Status = TransferStatus.Completed;
+                transfer.UpdateTime = DateTime.Now;
+                transfer.UpdateBy = user;
+
+                await _uow.SaveChangesAsync();
+                InvalidateStockCache();
+            });
         }
         catch (DbUpdateConcurrencyException)
         {
-            await tx.RollbackAsync();
             throw new BusinessException("库存数据已被他人修改，请刷新后重试", "STOCK_CONFLICT");
         }
     }
@@ -1307,13 +1265,7 @@ public class StockService : IStockService
             .Take(query.PageSize)
             .ToListAsync();
 
-        return new PagedResult<StockAlertRecordDto>
-        {
-            Items = items,
-            TotalCount = total,
-            Page = query.Page,
-            PageSize = query.PageSize
-        };
+        return PagedResult<StockAlertRecordDto>.Create(items, total, query.Page, query.PageSize);
     }
 
     public async Task<StockWarningStatDto> GetWarningStatsAsync()

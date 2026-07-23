@@ -1,5 +1,4 @@
 using Microsoft.EntityFrameworkCore;
-using EquipmentIMS.DAL.Configurations;
 using EquipmentIMS.Models.Entities;
 
 namespace EquipmentIMS.DAL;
@@ -65,50 +64,6 @@ public class AppDbContext : DbContext
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
-
-        // 加载所有 IEntityTypeConfiguration 配置
-        modelBuilder.ApplyConfiguration(new SysUserConfiguration());
-        modelBuilder.ApplyConfiguration(new SysRoleConfiguration());
-        modelBuilder.ApplyConfiguration(new SysUserRoleConfiguration());
-        modelBuilder.ApplyConfiguration(new SysPermissionConfiguration());
-        modelBuilder.ApplyConfiguration(new SysRolePermissionConfiguration());
-        modelBuilder.ApplyConfiguration(new SysOperationLogConfiguration());
-        modelBuilder.ApplyConfiguration(new SysPasswordHistoryConfiguration());
-        modelBuilder.ApplyConfiguration(new SysConfigConfiguration());
-        modelBuilder.ApplyConfiguration(new SysNotificationConfiguration());
-
-        modelBuilder.ApplyConfiguration(new BaseSupplierConfiguration());
-        modelBuilder.ApplyConfiguration(new BaseCustomerConfiguration());
-        modelBuilder.ApplyConfiguration(new BaseCategoryConfiguration());
-        modelBuilder.ApplyConfiguration(new BaseWarehouseConfiguration());
-        modelBuilder.ApplyConfiguration(new BaseProductConfiguration());
-        modelBuilder.ApplyConfiguration(new BaseProductStockConfiguration());
-        modelBuilder.ApplyConfiguration(new BaseCustomerPriceConfiguration());
-
-        modelBuilder.ApplyConfiguration(new PurPurchaseOrderConfiguration());
-        modelBuilder.ApplyConfiguration(new PurPurchaseOrderDetailConfiguration());
-        modelBuilder.ApplyConfiguration(new PurPurchaseInConfiguration());
-        modelBuilder.ApplyConfiguration(new PurPurchaseInDetailConfiguration());
-        modelBuilder.ApplyConfiguration(new PurPurchaseReturnConfiguration());
-        modelBuilder.ApplyConfiguration(new PurPurchaseReturnDetailConfiguration());
-
-        modelBuilder.ApplyConfiguration(new SaleSaleOrderConfiguration());
-        modelBuilder.ApplyConfiguration(new SaleSaleOrderDetailConfiguration());
-        modelBuilder.ApplyConfiguration(new SaleSaleOutConfiguration());
-        modelBuilder.ApplyConfiguration(new SaleSaleOutDetailConfiguration());
-        modelBuilder.ApplyConfiguration(new SaleReturnConfiguration());
-        modelBuilder.ApplyConfiguration(new SaleReturnDetailConfiguration());
-
-        modelBuilder.ApplyConfiguration(new InvStockTransactionConfiguration());
-        modelBuilder.ApplyConfiguration(new InvStockCheckConfiguration());
-        modelBuilder.ApplyConfiguration(new InvStockCheckDetailConfiguration());
-        modelBuilder.ApplyConfiguration(new InvStockTransferConfiguration());
-        modelBuilder.ApplyConfiguration(new InvStockTransferDetailConfiguration());
-        modelBuilder.ApplyConfiguration(new InvStockAlertConfiguration());
-
-        modelBuilder.ApplyConfiguration(new MaintDeviceArchiveConfiguration());
-        modelBuilder.ApplyConfiguration(new MaintRepairOrderConfiguration());
-        modelBuilder.ApplyConfiguration(new MaintRepairPartConfiguration());
-        modelBuilder.ApplyConfiguration(new MaintMaintenancePlanConfiguration());
+        modelBuilder.ApplyConfigurationsFromAssembly(typeof(AppDbContext).Assembly);
     }
 }

@@ -60,23 +60,33 @@ public class ReportService : IReportService
 
     public async Task<List<StockFundDto>> GetStockFundAnalysisAsync()
     {
-        var query = from ps in _uow.GetRepository<BaseProductStock>().Query().Where(s => !s.IsDeleted)
-                    join p in _uow.GetRepository<BaseProduct>().Query().Where(p => !p.IsDeleted) on ps.ProductId equals p.Id
-                    join w in _uow.GetRepository<BaseWarehouse>().Query() on ps.WarehouseId equals w.Id
-                    group new { ps, p, w } by new { w.Id, w.Name } into g
-                    let totalVal = g.Sum(x => x.ps.Quantity * x.p.PurchasePrice)
-                    orderby totalVal descending
-                    select new StockFundDto
-                    {
-                        GroupName = g.Key.Name,
-                        Dimension = "warehouse",
-                        StockValue = totalVal,
-                        ProductCount = g.Select(x => x.p.Id).Distinct().Count(),
-                        TotalQty = g.Sum(x => x.ps.Quantity),
-                        Percent = 0
-                    };
+        // 先用 ToListAsync 获取原始数据，再在内存中做聚合（GroupBy.Select 中包含 Distinct 无法翻译）
+        var rawData = await (from ps in _uow.GetRepository<BaseProductStock>().Query().Where(s => !s.IsDeleted)
+                             join p in _uow.GetRepository<BaseProduct>().Query().Where(p => !p.IsDeleted) on ps.ProductId equals p.Id
+                             join w in _uow.GetRepository<BaseWarehouse>().Query() on ps.WarehouseId equals w.Id
+                             select new
+                             {
+                                 WarehouseId = w.Id,
+                                 WarehouseName = w.Name,
+                                 ProductId = p.Id,
+                                 Quantity = ps.Quantity,
+                                 PurchasePrice = p.PurchasePrice
+                             }).ToListAsync();
 
-        var items = await query.ToListAsync();
+        var items = rawData
+            .GroupBy(x => new { x.WarehouseId, x.WarehouseName })
+            .Select(g => new StockFundDto
+            {
+                GroupName = g.Key.WarehouseName,
+                Dimension = "warehouse",
+                StockValue = g.Sum(x => x.Quantity * x.PurchasePrice),
+                ProductCount = g.Select(x => x.ProductId).Distinct().Count(),
+                TotalQty = g.Sum(x => x.Quantity),
+                Percent = 0
+            })
+            .OrderByDescending(x => x.StockValue)
+            .ToList();
+
         var grandTotal = items.Sum(i => i.StockValue);
         if (grandTotal > 0)
             items.ForEach(i => i.Percent = Math.Round(i.StockValue / grandTotal * 100, 1));
@@ -96,13 +106,7 @@ public class ReportService : IReportService
 
         var data = entities.Select(MapTransactionToDto).ToList();
 
-        return new PagedResult<StockTransactionDto>
-        {
-            Items = data,
-            TotalCount = total,
-            Page = query.Page,
-            PageSize = query.PageSize
-        };
+        return PagedResult<StockTransactionDto>.Create(data, total, query.Page, query.PageSize);
     }
 
     public async Task<List<StockWarningDto>> GetStockWarningsAsync()
@@ -147,20 +151,31 @@ public class ReportService : IReportService
 
     private async Task<List<SaleRankingDto>> GetProductSaleRankingAsync(IQueryable<SaleSaleOut> saleOutQuery)
     {
-        var result = await (from d in _uow.GetRepository<SaleSaleOutDetail>().Query()
-                            join o in saleOutQuery on d.SaleOutId equals o.Id
-                            join p in _uow.GetRepository<BaseProduct>().Query() on d.ProductId equals p.Id
-                            group new { d, p } by new { p.Id, p.Name } into g
-                            let totalAmt = g.Sum(x => x.d.Amount)
-                            orderby totalAmt descending
-                            select new SaleRankingDto
-                            {
-                                Name = g.Key.Name,
-                                TotalQuantity = g.Sum(x => x.d.Qty),
-                                TotalAmount = totalAmt,
-                                OrderCount = g.Select(x => x.d.SaleOutId).Distinct().Count(),
-                                Ranking = 0
-                            }).ToListAsync();
+        // EF Core 无法翻译 GroupBy 中的 Select().Distinct().Count()，先取原始数据再聚合
+        var rawData = await (from d in _uow.GetRepository<SaleSaleOutDetail>().Query()
+                             join o in saleOutQuery on d.SaleOutId equals o.Id
+                             join p in _uow.GetRepository<BaseProduct>().Query() on d.ProductId equals p.Id
+                             select new
+                             {
+                                 ProductId = p.Id,
+                                 ProductName = p.Name,
+                                 SaleOutId = d.SaleOutId,
+                                 Qty = d.Qty,
+                                 Amount = d.Amount
+                             }).ToListAsync();
+
+        var result = rawData
+            .GroupBy(x => new { x.ProductId, x.ProductName })
+            .Select(g => new SaleRankingDto
+            {
+                Name = g.Key.ProductName,
+                TotalQuantity = g.Sum(x => x.Qty),
+                TotalAmount = g.Sum(x => x.Amount),
+                OrderCount = g.Select(x => x.SaleOutId).Distinct().Count(),
+                Ranking = 0
+            })
+            .OrderByDescending(x => x.TotalAmount)
+            .ToList();
 
         for (int i = 0; i < result.Count; i++) result[i].Ranking = i + 1;
         return result;
@@ -209,13 +224,16 @@ public class ReportService : IReportService
     public async Task<List<SaleTrendDto>> GetSaleTrendAsync(DateTime startDate, DateTime endDate, string groupBy)
     {
         var endDateEnd = endDate.Date.AddDays(1).AddSeconds(-1);
-        var query = _uow.GetRepository<SaleSaleOut>().Query()
-            .Where(o => !o.IsDeleted && o.OutTime >= startDate && o.OutTime <= endDateEnd);
+
+        // EF Core 无法翻译 string.Format，先取原始数据再在内存中聚合
+        var rawData = await _uow.GetRepository<SaleSaleOut>().Query()
+            .Where(o => !o.IsDeleted && o.OutTime >= startDate && o.OutTime <= endDateEnd)
+            .Select(o => new { o.OutTime, o.TotalAmount })
+            .ToListAsync();
 
         if (groupBy == "quarter")
         {
-            var result = await query.ToListAsync();
-            return result.GroupBy(o => new { o.OutTime.Year, Quarter = (o.OutTime.Month - 1) / 3 + 1 })
+            return rawData.GroupBy(o => new { o.OutTime.Year, Quarter = (o.OutTime.Month - 1) / 3 + 1 })
                 .Select(g => new SaleTrendDto
                 {
                     Period = $"{g.Key.Year}Q{g.Key.Quarter}",
@@ -225,15 +243,13 @@ public class ReportService : IReportService
         }
 
         // month (default)
-        var monthly = await query.GroupBy(o => new { o.OutTime.Year, o.OutTime.Month })
+        return rawData.GroupBy(o => new { o.OutTime.Year, o.OutTime.Month })
             .Select(g => new SaleTrendDto
             {
                 Period = $"{g.Key.Year}-{g.Key.Month:D2}",
                 TotalAmount = g.Sum(x => x.TotalAmount),
                 OrderCount = g.Count()
-            }).OrderBy(t => t.Period).ToListAsync();
-
-        return monthly;
+            }).OrderBy(t => t.Period).ToList();
     }
 
     public async Task<SaleReturnStatDto> GetSaleReturnStatAsync(DateTime startDate, DateTime endDate)
@@ -287,13 +303,16 @@ public class ReportService : IReportService
     public async Task<List<PurchaseSummaryDto>> GetPurchaseSummaryAsync(DateTime startDate, DateTime endDate, string groupBy)
     {
         var endDateEnd = endDate.Date.AddDays(1).AddSeconds(-1);
-        var query = _uow.GetRepository<PurPurchaseIn>().Query()
-            .Where(p => !p.IsDeleted && p.InDate >= startDate && p.InDate <= endDateEnd);
+
+        // 先用 ToListAsync 获取原始数据，再在内存中做聚合（GroupBy.Select 中包含 Distinct 无法翻译）
+        var rawData = await _uow.GetRepository<PurPurchaseIn>().Query()
+            .Where(p => !p.IsDeleted && p.InDate >= startDate && p.InDate <= endDateEnd)
+            .Select(p => new { p.InDate, p.TotalAmount, p.SupplierId })
+            .ToListAsync();
 
         if (groupBy == "quarter")
         {
-            var all = await query.ToListAsync();
-            return all.GroupBy(p => new { p.InDate.Year, Quarter = (p.InDate.Month - 1) / 3 + 1 })
+            return rawData.GroupBy(p => new { p.InDate.Year, Quarter = (p.InDate.Month - 1) / 3 + 1 })
                 .Select(g => new PurchaseSummaryDto
                 {
                     Period = $"{g.Key.Year}Q{g.Key.Quarter}",
@@ -303,14 +322,14 @@ public class ReportService : IReportService
                 }).OrderBy(t => t.Period).ToList();
         }
 
-        return await query.GroupBy(p => new { p.InDate.Year, p.InDate.Month })
+        return rawData.GroupBy(p => new { p.InDate.Year, p.InDate.Month })
             .Select(g => new PurchaseSummaryDto
             {
                 Period = $"{g.Key.Year}-{g.Key.Month:D2}",
                 TotalAmount = g.Sum(x => x.TotalAmount),
                 OrderCount = g.Count(),
                 SupplierCount = g.Select(x => x.SupplierId).Distinct().Count()
-            }).OrderBy(t => t.Period).ToListAsync();
+            }).OrderBy(t => t.Period).ToList();
     }
 
     public async Task<PurchaseReturnStatDto> GetPurchaseReturnStatAsync(DateTime startDate, DateTime endDate)
@@ -409,7 +428,7 @@ public class ReportService : IReportService
                                      AvgHours = g.Average(x => (double)x.WorkHours)
                                  }).ToListAsync(),
 
-            _ => new List<RepairStatDto>()
+            _ => []
         };
     }
 
@@ -474,24 +493,40 @@ public class ReportService : IReportService
     {
         var endDateEnd = endDate.Date.AddDays(1).AddSeconds(-1);
 
-        var result = await (from rp in _uow.GetRepository<MaintRepairPart>().Query().Where(r => !r.IsDeleted)
+        // EF Core 无法翻译 GroupBy 中的 Select().Distinct().Count()，先取原始数据再聚合
+        var rawData = await (from rp in _uow.GetRepository<MaintRepairPart>().Query().Where(r => !r.IsDeleted)
                             join ro in _uow.GetRepository<MaintRepairOrder>().Query() on rp.RepairOrderId equals ro.Id
                             join p in _uow.GetRepository<BaseProduct>().Query() on rp.ProductId equals p.Id
                             where ro.CreateTime >= startDate && ro.CreateTime <= endDateEnd
-                            group rp by new { p.Id, p.Code, p.Name } into g
-                            let totalAmt = g.Sum(x => x.Amount)
-                            let totalQty = g.Sum(x => x.Qty)
-                            orderby totalAmt descending
-                            select new PartsUsageDto
+                            select new
                             {
-                                ProductId = g.Key.Id,
-                                ProductCode = g.Key.Code,
-                                ProductName = g.Key.Name,
-                                UsageCount = g.Select(x => x.RepairOrderId).Distinct().Count(),
-                                TotalQty = totalQty,
-                                TotalAmount = totalAmt,
-                                AvgUnitPrice = totalQty > 0 ? Math.Round(totalAmt / totalQty, 2) : 0
+                                ProductId = p.Id,
+                                ProductCode = p.Code,
+                                ProductName = p.Name,
+                                RepairOrderId = rp.RepairOrderId,
+                                Qty = rp.Qty,
+                                Amount = rp.Amount
                             }).ToListAsync();
+
+        var result = rawData
+            .GroupBy(x => new { x.ProductId, x.ProductCode, x.ProductName })
+            .Select(g =>
+            {
+                var totalQty = g.Sum(x => x.Qty);
+                var totalAmt = g.Sum(x => x.Amount);
+                return new PartsUsageDto
+                {
+                    ProductId = g.Key.ProductId,
+                    ProductCode = g.Key.ProductCode,
+                    ProductName = g.Key.ProductName,
+                    UsageCount = g.Select(x => x.RepairOrderId).Distinct().Count(),
+                    TotalQty = totalQty,
+                    TotalAmount = totalAmt,
+                    AvgUnitPrice = totalQty > 0 ? Math.Round(totalAmt / totalQty, 2) : 0
+                };
+            })
+            .OrderByDescending(x => x.TotalAmount)
+            .ToList();
 
         return result;
     }

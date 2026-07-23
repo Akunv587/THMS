@@ -67,13 +67,7 @@ public class SaleService : ISaleService
             .Take(query.PageSize)
             .ToListAsync();
 
-        return new PagedResult<SaleOrderListDto>
-        {
-            Items = items.Select(ToListDto).ToList(),
-            TotalCount = total,
-            Page = query.Page,
-            PageSize = query.PageSize
-        };
+        return PagedResult<SaleOrderListDto>.Create(items.Select(ToListDto).ToList(), total, query.Page, query.PageSize);
     }
 
     public async Task<SaleOrderDto> GetByIdAsync(long id)
@@ -195,14 +189,13 @@ public class SaleService : ISaleService
 
     public async Task ApproveAsync(long orderId, string approver)
     {
-        await using var tx = await _uow.BeginTransactionAsync();
+        var order = await _uow.SaleOrders.GetByIdWithDetailsAsync(orderId)
+            ?? throw new NotFoundException("销售订单不存在");
+        if (order.Status != SaleOrderStatus.PendingApproval)
+            throw new BusinessException("仅待审批状态可审批", "INVALID_STATUS");
+
         try
         {
-            var order = await _uow.SaleOrders.GetByIdWithDetailsAsync(orderId)
-                ?? throw new NotFoundException("销售订单不存在");
-            if (order.Status != SaleOrderStatus.PendingApproval)
-                throw new BusinessException("仅待审批状态可审批", "INVALID_STATUS");
-
             // 遍历明细校验并锁定库存
             foreach (var detail in order.Details)
             {
@@ -235,30 +228,23 @@ public class SaleService : ISaleService
             _uow.SaleOrders.Update(order);
 
             await _uow.SaveChangesAsync();
-            await tx.CommitAsync();
-
-            // 发送通知给创建人
-            try
-            {
-                var creatorUserId = await GetUserIdByNameAsync(order.CreateBy);
-                await _notification.SendAsync(creatorUserId, "销售订单已通过",
-                    $"订单 {order.OrderNo} 已审批通过，审批人: {approver}",
-                    NotificationType.ApprovalReminder, "SaleOrder", order.Id);
-            }
-            catch
-            {
-                // 通知发送失败不影响主流程
-            }
         }
         catch (DbUpdateConcurrencyException)
         {
-            await tx.RollbackAsync();
             throw new BusinessException("库存数据已被修改，请重试", "CONCURRENCY_ERROR");
         }
-        catch (BusinessException)
+
+        // 发送通知给创建人
+        try
         {
-            await tx.RollbackAsync();
-            throw;
+            var creatorUserId = await GetUserIdByNameAsync(order.CreateBy);
+            await _notification.SendAsync(creatorUserId, "销售订单已通过",
+                $"订单 {order.OrderNo} 已审批通过，审批人: {approver}",
+                NotificationType.ApprovalReminder, "SaleOrder", order.Id);
+        }
+        catch
+        {
+            // 通知发送失败不影响主流程
         }
     }
 
@@ -332,7 +318,7 @@ public class SaleService : ISaleService
         if (order.Status != SaleOrderStatus.Approved && order.Status != SaleOrderStatus.PartialShipped)
             throw new InvalidOperationException("仅已审批或部分出库状态的订单可出库");
 
-        var result = new List<SaleOrderDetailOutDto>();
+        List<SaleOrderDetailOutDto> result = [];
         foreach (var detail in order.Details)
         {
             var stock = await _uow.Stocks.FindByProductAndWarehouseAsync(detail.ProductId, detail.WarehouseId);
@@ -522,9 +508,7 @@ public class SaleService : ISaleService
             .Take(pageSize)
             .ToListAsync();
 
-        return new PagedResult<SaleOutListDto>
-        {
-            Items = items.Select(o => new SaleOutListDto
+        return PagedResult<SaleOutListDto>.Create(items.Select(o => new SaleOutListDto
             {
                 Id = o.Id,
                 OutNo = o.OutNo,
@@ -535,11 +519,7 @@ public class SaleService : ISaleService
                 TotalAmount = o.TotalAmount,
                 Operator = o.Operator,
                 CreateTime = o.CreateTime
-            }).ToList(),
-            TotalCount = total,
-            Page = page,
-            PageSize = pageSize
-        };
+            }).ToList(), total, page, pageSize);
     }
 
     public async Task<SaleOutDto> GetSaleOutByIdAsync(long id)
@@ -610,9 +590,7 @@ public class SaleService : ISaleService
             .Take(pageSize)
             .ToListAsync();
 
-        return new PagedResult<SaleReturnListDto>
-        {
-            Items = items.Select(r => new SaleReturnListDto
+        return PagedResult<SaleReturnListDto>.Create(items.Select(r => new SaleReturnListDto
             {
                 Id = r.Id,
                 ReturnNo = r.ReturnNo,
@@ -634,11 +612,7 @@ public class SaleService : ISaleService
                 ApproveTime = r.ApproveTime,
                 CreateBy = r.CreateBy,
                 CreateTime = r.CreateTime
-            }).ToList(),
-            TotalCount = total,
-            Page = page,
-            PageSize = pageSize
-        };
+            }).ToList(), total, page, pageSize);
     }
 
     public async Task<List<SaleReturnDetailDto>> GetOutDetailsForReturnAsync(long saleOutId)
@@ -661,7 +635,7 @@ public class SaleService : ISaleService
             .Where(rd => outDetailIds.Contains(rd.SaleOutDetailId) && !rd.IsDeleted)
             .ToListAsync();
 
-        var result = new List<SaleReturnDetailDto>();
+        List<SaleReturnDetailDto> result = [];
         foreach (var d in outDetails)
         {
             var returnedQty = returnDetails

@@ -55,13 +55,7 @@ public class PurchaseService : IPurchaseService
             .Take(query.PageSize)
             .ToListAsync();
 
-        return new PagedResult<PurchaseOrderListDto>
-        {
-            Items = items.Select(ToListDto).ToList(),
-            TotalCount = total,
-            Page = query.Page,
-            PageSize = query.PageSize
-        };
+        return PagedResult<PurchaseOrderListDto>.Create(items.Select(ToListDto).ToList(), total, query.Page, query.PageSize);
     }
 
     public async Task<PurchaseOrderDto> GetByIdAsync(long id)
@@ -259,9 +253,7 @@ public class PurchaseService : IPurchaseService
             .Take(query.PageSize)
             .ToListAsync();
 
-        return new PagedResult<PurchaseInListDto>
-        {
-            Items = items.Select(i => new PurchaseInListDto
+        return PagedResult<PurchaseInListDto>.Create(items.Select(i => new PurchaseInListDto
             {
                 Id = i.Id,
                 InNo = i.InNo,
@@ -276,126 +268,125 @@ public class PurchaseService : IPurchaseService
                 Status = i.Status,
                 Operator = i.Operator ?? "",
                 CreateTime = i.CreateTime
-            }).ToList(),
-            TotalCount = total,
-            Page = query.Page,
-            PageSize = query.PageSize
-        };
+            }).ToList(), total, query.Page, query.PageSize);
     }
 
     public async Task<long> PurchaseInAsync(PurchaseInRequestDto dto, string currentUser)
     {
-        await using var tx = await _uow.BeginTransactionAsync();
+        long purchaseInId = 0;
         try
         {
-            var order = await _uow.PurchaseOrders.GetByIdAsync(dto.PurchaseOrderId)
-                ?? throw new NotFoundException("采购订单不存在");
-
-            if (order.Status != PurchaseOrderStatus.Approved && order.Status != PurchaseOrderStatus.PartialReceived)
-                throw new BusinessException("采购订单状态不允许入库", "INVALID_STATUS");
-
-            // 加载订单明细
-            var orderDetail = await _uow.GetRepository<PurPurchaseOrderDetail>().Query()
-                .Where(d => d.PurchaseOrderId == dto.PurchaseOrderId)
-                .Include(d => d.Product)
-                .ToListAsync();
-
-            var inNo = await _numberGen.GenerateAsync("PIN", "Pur_PurchaseIn", "InNo");
-            var purchaseIn = new PurPurchaseIn
+            await _uow.ExecuteInTransactionAsync(async () =>
             {
-                InNo = inNo,
-                PurchaseOrderId = dto.PurchaseOrderId,
-                SupplierId = order.SupplierId,
-                WarehouseId = order.WarehouseId,
-                InDate = dto.InDate,
-                TotalAmount = dto.Details.Sum(d => d.Amount),
-                Status = PurchaseInStatus.Received,
-                Operator = currentUser,
-                Remark = dto.Remark,
-                CreateBy = currentUser,
-                CreateTime = DateTime.Now
-            };
-            await _uow.GetRepository<PurPurchaseIn>().AddAsync(purchaseIn);
-            await _uow.SaveChangesAsync();
+                var order = await _uow.PurchaseOrders.GetByIdAsync(dto.PurchaseOrderId)
+                    ?? throw new NotFoundException("采购订单不存在");
 
-            foreach (var item in dto.Details)
-            {
-                var od = orderDetail.First(d => d.ProductId == item.ProductId);
-                var remainingQty = od.Qty - od.ReceivedQty;
-                if (item.Qty > remainingQty)
-                    throw new BusinessException($"设备[{item.ProductCode}]入库数量超过订单剩余数量", "QTY_EXCEED");
+                if (order.Status != PurchaseOrderStatus.Approved && order.Status != PurchaseOrderStatus.PartialReceived)
+                    throw new BusinessException("采购订单状态不允许入库", "INVALID_STATUS");
 
-                // 查找或创建库存记录
-                var stock = await _uow.Stocks.FindByProductAndWarehouseAsync(item.ProductId, order.WarehouseId);
-                if (stock == null)
+                // 加载订单明细
+                var orderDetail = await _uow.GetRepository<PurPurchaseOrderDetail>().Query()
+                    .Where(d => d.PurchaseOrderId == dto.PurchaseOrderId)
+                    .Include(d => d.Product)
+                    .ToListAsync();
+
+                var inNo = await _numberGen.GenerateAsync("PIN", "Pur_PurchaseIn", "InNo");
+                var purchaseIn = new PurPurchaseIn
                 {
-                    stock = new BaseProductStock
+                    InNo = inNo,
+                    PurchaseOrderId = dto.PurchaseOrderId,
+                    SupplierId = order.SupplierId,
+                    WarehouseId = order.WarehouseId,
+                    InDate = dto.InDate,
+                    TotalAmount = dto.Details.Sum(d => d.Amount),
+                    Status = PurchaseInStatus.Received,
+                    Operator = currentUser,
+                    Remark = dto.Remark,
+                    CreateBy = currentUser,
+                    CreateTime = DateTime.Now
+                };
+                await _uow.GetRepository<PurPurchaseIn>().AddAsync(purchaseIn);
+                await _uow.SaveChangesAsync();
+
+                foreach (var item in dto.Details)
+                {
+                    var od = orderDetail.First(d => d.ProductId == item.ProductId);
+                    var remainingQty = od.Qty - od.ReceivedQty;
+                    if (item.Qty > remainingQty)
+                        throw new BusinessException($"设备[{item.ProductCode}]入库数量超过订单剩余数量", "QTY_EXCEED");
+
+                    // 查找或创建库存记录
+                    var stock = await _uow.Stocks.FindByProductAndWarehouseAsync(item.ProductId, order.WarehouseId);
+                    if (stock == null)
                     {
+                        stock = new BaseProductStock
+                        {
+                            ProductId = item.ProductId,
+                            WarehouseId = order.WarehouseId,
+                            Quantity = 0,
+                            LockQty = 0,
+                            CreateBy = currentUser,
+                            CreateTime = DateTime.Now
+                        };
+                        await _uow.GetRepository<BaseProductStock>().AddAsync(stock);
+                        await _uow.SaveChangesAsync();
+                    }
+
+                    var balanceBefore = stock.Quantity;
+                    stock.Quantity += item.Qty;
+                    if (stock.Quantity < 0) throw new BusinessException("库存数量异常", "STOCK_NEGATIVE");
+                    stock.UpdateBy = currentUser;
+                    stock.UpdateTime = DateTime.Now;
+
+                    // 记录库存流水
+                    await _uow.StockTransactions.AddAsync(new InvStockTransaction
+                    {
+                        TransactionNo = await _numberGen.GenerateWithTimeAsync("TXN", "Inv_StockTransaction", "TransactionNo"),
+                        TransactionType = TransactionType.PurchaseIn,
                         ProductId = item.ProductId,
                         WarehouseId = order.WarehouseId,
-                        Quantity = 0,
-                        LockQty = 0,
+                        Qty = item.Qty,
+                        BalanceQty = balanceBefore + item.Qty,
+                        RefType = "PurchaseIn",
+                        RefId = purchaseIn.Id,
+                        RefNo = inNo,
+                        Operator = currentUser,
                         CreateBy = currentUser,
                         CreateTime = DateTime.Now
-                    };
-                    await _uow.GetRepository<BaseProductStock>().AddAsync(stock);
-                    await _uow.SaveChangesAsync();
+                    });
+
+                    // 入库明细
+                    await _uow.GetRepository<PurPurchaseInDetail>().AddAsync(new PurPurchaseInDetail
+                    {
+                        PurchaseInId = purchaseIn.Id,
+                        ProductId = item.ProductId,
+                        Qty = item.Qty,
+                        UnitPrice = item.UnitPrice,
+                        Amount = item.Amount,
+                        CreateBy = currentUser,
+                        CreateTime = DateTime.Now
+                    });
+
+                    // 更新订单明细已入库数量
+                    od.ReceivedQty += item.Qty;
                 }
 
-                var balanceBefore = stock.Quantity;
-                stock.Quantity += item.Qty;
-                if (stock.Quantity < 0) throw new BusinessException("库存数量异常", "STOCK_NEGATIVE");
-                stock.UpdateBy = currentUser;
-                stock.UpdateTime = DateTime.Now;
+                // 更新订单状态
+                var allReceived = orderDetail.All(d => d.ReceivedQty >= d.Qty);
+                order.Status = allReceived ? PurchaseOrderStatus.Received : PurchaseOrderStatus.PartialReceived;
+                order.ReceivedAmount += dto.Details.Sum(d => d.Amount);
+                _uow.PurchaseOrders.Update(order);
 
-                // 记录库存流水
-                await _uow.StockTransactions.AddAsync(new InvStockTransaction
-                {
-                    TransactionNo = await _numberGen.GenerateWithTimeAsync("TXN", "Inv_StockTransaction", "TransactionNo"),
-                    TransactionType = TransactionType.PurchaseIn,
-                    ProductId = item.ProductId,
-                    WarehouseId = order.WarehouseId,
-                    Qty = item.Qty,
-                    BalanceQty = balanceBefore + item.Qty,
-                    RefType = "PurchaseIn",
-                    RefId = purchaseIn.Id,
-                    RefNo = inNo,
-                    Operator = currentUser,
-                    CreateBy = currentUser,
-                    CreateTime = DateTime.Now
-                });
-
-                // 入库明细
-                await _uow.GetRepository<PurPurchaseInDetail>().AddAsync(new PurPurchaseInDetail
-                {
-                    PurchaseInId = purchaseIn.Id,
-                    ProductId = item.ProductId,
-                    Qty = item.Qty,
-                    UnitPrice = item.UnitPrice,
-                    Amount = item.Amount,
-                    CreateBy = currentUser,
-                    CreateTime = DateTime.Now
-                });
-
-                // 更新订单明细已入库数量
-                od.ReceivedQty += item.Qty;
-            }
-
-            // 更新订单状态
-            var allReceived = orderDetail.All(d => d.ReceivedQty >= d.Qty);
-            order.Status = allReceived ? PurchaseOrderStatus.Received : PurchaseOrderStatus.PartialReceived;
-            order.ReceivedAmount += dto.Details.Sum(d => d.Amount);
-            _uow.PurchaseOrders.Update(order);
-
-            await _uow.SaveChangesAsync();
-            await tx.CommitAsync();
-            return purchaseIn.Id;
+                await _uow.SaveChangesAsync();
+                purchaseInId = purchaseIn.Id;
+            });
         }
         catch (DbUpdateConcurrencyException)
         {
-            await tx.RollbackAsync();
             throw new BusinessException("库存数据已被他人修改，请刷新后重试", "STOCK_CONFLICT");
         }
+
+        return purchaseInId;
     }
 
     // ==================== 采购退货 ====================
@@ -425,9 +416,7 @@ public class PurchaseService : IPurchaseService
             .Take(query.PageSize)
             .ToListAsync();
 
-        return new PagedResult<PurchaseReturnListDto>
-        {
-            Items = items.Select(r => new PurchaseReturnListDto
+        return PagedResult<PurchaseReturnListDto>.Create(items.Select(r => new PurchaseReturnListDto
             {
                 Id = r.Id,
                 ReturnNo = r.ReturnNo,
@@ -443,109 +432,108 @@ public class PurchaseService : IPurchaseService
                 Reason = r.Reason,
                 Operator = r.Operator,
                 CreateTime = r.CreateTime
-            }).ToList(),
-            TotalCount = total,
-            Page = query.Page,
-            PageSize = query.PageSize
-        };
+            }).ToList(), total, query.Page, query.PageSize);
     }
 
     public async Task<long> PurchaseReturnAsync(PurchaseReturnRequestDto dto, string currentUser)
     {
-        await using var tx = await _uow.BeginTransactionAsync();
+        long purchaseReturnId = 0;
         try
         {
-            var purchaseIn = await _uow.GetRepository<PurPurchaseIn>().Query()
-                .Include(i => i.Details).ThenInclude(d => d.Product)
-                .Include(i => i.Supplier)
-                .Include(i => i.Warehouse)
-                .FirstOrDefaultAsync(i => i.Id == dto.PurchaseInId)
-                ?? throw new NotFoundException("入库单不存在");
-
-            if (purchaseIn.Status != PurchaseInStatus.Received && purchaseIn.Status != PurchaseInStatus.Returned)
-                throw new BusinessException("入库单状态不允许退货", "INVALID_STATUS");
-
-            var inDetails = purchaseIn.Details.ToList();
-
-            var returnNo = await _numberGen.GenerateAsync("PRT", "Pur_PurchaseReturn", "ReturnNo");
-            var purchaseReturn = new PurPurchaseReturn
+            await _uow.ExecuteInTransactionAsync(async () =>
             {
-                ReturnNo = returnNo,
-                PurchaseInId = dto.PurchaseInId,
-                SupplierId = purchaseIn.SupplierId,
-                WarehouseId = purchaseIn.WarehouseId,
-                ReturnDate = dto.ReturnDate,
-                TotalAmount = dto.Details.Sum(d => d.Amount),
-                Reason = dto.Reason,
-                Status = PurchaseReturnStatus.Returned,
-                Operator = currentUser,
-                Remark = dto.Remark,
-                CreateBy = currentUser,
-                CreateTime = DateTime.Now
-            };
-            await _uow.GetRepository<PurPurchaseReturn>().AddAsync(purchaseReturn);
-            await _uow.SaveChangesAsync();
+                var purchaseIn = await _uow.GetRepository<PurPurchaseIn>().Query()
+                    .Include(i => i.Details).ThenInclude(d => d.Product)
+                    .Include(i => i.Supplier)
+                    .Include(i => i.Warehouse)
+                    .FirstOrDefaultAsync(i => i.Id == dto.PurchaseInId)
+                    ?? throw new NotFoundException("入库单不存在");
 
-            foreach (var item in dto.Details)
-            {
-                var ind = inDetails.First(d => d.ProductId == item.ProductId);
-                var remainingReturn = ind.Qty - ind.ReturnedQty;
-                if (item.Qty > remainingReturn)
-                    throw new BusinessException($"设备[{item.ProductCode}]退货数量超过入库数量", "QTY_EXCEED");
+                if (purchaseIn.Status != PurchaseInStatus.Received && purchaseIn.Status != PurchaseInStatus.Returned)
+                    throw new BusinessException("入库单状态不允许退货", "INVALID_STATUS");
 
-                var stock = await _uow.Stocks.FindByProductAndWarehouseAsync(item.ProductId, purchaseIn.WarehouseId)
-                    ?? throw new BusinessException($"设备[{item.ProductCode}]在仓库无库存", "STOCK_NOT_FOUND");
+                var inDetails = purchaseIn.Details.ToList();
 
-                var balanceBefore = stock.Quantity;
-                stock.Quantity -= item.Qty;
-                if (stock.Quantity < 0) throw new BusinessException("库存数量异常", "STOCK_NEGATIVE");
-                stock.UpdateBy = currentUser;
-                stock.UpdateTime = DateTime.Now;
-
-                await _uow.StockTransactions.AddAsync(new InvStockTransaction
+                var returnNo = await _numberGen.GenerateAsync("PRT", "Pur_PurchaseReturn", "ReturnNo");
+                var purchaseReturn = new PurPurchaseReturn
                 {
-                    TransactionNo = await _numberGen.GenerateWithTimeAsync("TXN", "Inv_StockTransaction", "TransactionNo"),
-                    TransactionType = TransactionType.PurchaseReturnOut,
-                    ProductId = item.ProductId,
+                    ReturnNo = returnNo,
+                    PurchaseInId = dto.PurchaseInId,
+                    SupplierId = purchaseIn.SupplierId,
                     WarehouseId = purchaseIn.WarehouseId,
-                    Qty = -item.Qty,
-                    BalanceQty = balanceBefore - item.Qty,
-                    RefType = "PurchaseReturn",
-                    RefId = purchaseReturn.Id,
-                    RefNo = returnNo,
+                    ReturnDate = dto.ReturnDate,
+                    TotalAmount = dto.Details.Sum(d => d.Amount),
+                    Reason = dto.Reason,
+                    Status = PurchaseReturnStatus.Returned,
                     Operator = currentUser,
+                    Remark = dto.Remark,
                     CreateBy = currentUser,
                     CreateTime = DateTime.Now
-                });
+                };
+                await _uow.GetRepository<PurPurchaseReturn>().AddAsync(purchaseReturn);
+                await _uow.SaveChangesAsync();
 
-                await _uow.GetRepository<PurPurchaseReturnDetail>().AddAsync(new PurPurchaseReturnDetail
+                foreach (var item in dto.Details)
                 {
-                    PurchaseReturnId = purchaseReturn.Id,
-                    ProductId = item.ProductId,
-                    Qty = item.Qty,
-                    UnitPrice = item.UnitPrice,
-                    Amount = item.Amount,
-                    CreateBy = currentUser,
-                    CreateTime = DateTime.Now
-                });
+                    var ind = inDetails.First(d => d.ProductId == item.ProductId);
+                    var remainingReturn = ind.Qty - ind.ReturnedQty;
+                    if (item.Qty > remainingReturn)
+                        throw new BusinessException($"设备[{item.ProductCode}]退货数量超过入库数量", "QTY_EXCEED");
 
-                ind.ReturnedQty += item.Qty;
-            }
+                    var stock = await _uow.Stocks.FindByProductAndWarehouseAsync(item.ProductId, purchaseIn.WarehouseId)
+                        ?? throw new BusinessException($"设备[{item.ProductCode}]在仓库无库存", "STOCK_NOT_FOUND");
 
-            var allReturned = inDetails.All(d => d.ReturnedQty >= d.Qty);
-            purchaseIn.Status = allReturned ? PurchaseInStatus.Returned : PurchaseInStatus.Received;
-            purchaseIn.UpdateBy = currentUser;
-            purchaseIn.UpdateTime = DateTime.Now;
+                    var balanceBefore = stock.Quantity;
+                    stock.Quantity -= item.Qty;
+                    if (stock.Quantity < 0) throw new BusinessException("库存数量异常", "STOCK_NEGATIVE");
+                    stock.UpdateBy = currentUser;
+                    stock.UpdateTime = DateTime.Now;
 
-            await _uow.SaveChangesAsync();
-            await tx.CommitAsync();
-            return purchaseReturn.Id;
+                    await _uow.StockTransactions.AddAsync(new InvStockTransaction
+                    {
+                        TransactionNo = await _numberGen.GenerateWithTimeAsync("TXN", "Inv_StockTransaction", "TransactionNo"),
+                        TransactionType = TransactionType.PurchaseReturnOut,
+                        ProductId = item.ProductId,
+                        WarehouseId = purchaseIn.WarehouseId,
+                        Qty = -item.Qty,
+                        BalanceQty = balanceBefore - item.Qty,
+                        RefType = "PurchaseReturn",
+                        RefId = purchaseReturn.Id,
+                        RefNo = returnNo,
+                        Operator = currentUser,
+                        CreateBy = currentUser,
+                        CreateTime = DateTime.Now
+                    });
+
+                    await _uow.GetRepository<PurPurchaseReturnDetail>().AddAsync(new PurPurchaseReturnDetail
+                    {
+                        PurchaseReturnId = purchaseReturn.Id,
+                        ProductId = item.ProductId,
+                        Qty = item.Qty,
+                        UnitPrice = item.UnitPrice,
+                        Amount = item.Amount,
+                        CreateBy = currentUser,
+                        CreateTime = DateTime.Now
+                    });
+
+                    ind.ReturnedQty += item.Qty;
+                }
+
+                var allReturned = inDetails.All(d => d.ReturnedQty >= d.Qty);
+                purchaseIn.Status = allReturned ? PurchaseInStatus.Returned : PurchaseInStatus.Received;
+                purchaseIn.UpdateBy = currentUser;
+                purchaseIn.UpdateTime = DateTime.Now;
+
+                await _uow.SaveChangesAsync();
+                purchaseReturnId = purchaseReturn.Id;
+            });
         }
         catch (DbUpdateConcurrencyException)
         {
-            await tx.RollbackAsync();
             throw new BusinessException("库存数据已被他人修改，请刷新后重试", "STOCK_CONFLICT");
         }
+
+        return purchaseReturnId;
     }
 
     private async Task<long> GetUserIdByNameAsync(string userName)

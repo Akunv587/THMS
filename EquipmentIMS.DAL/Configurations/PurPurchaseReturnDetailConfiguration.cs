@@ -4,9 +4,9 @@ using EquipmentIMS.Models.Entities;
 
 namespace EquipmentIMS.DAL.Configurations;
 
-public class PurPurchaseReturnDetailConfiguration : IEntityTypeConfiguration<PurPurchaseReturnDetail>
+public class PurPurchaseReturnDetailConfiguration : BaseEntityConfiguration<PurPurchaseReturnDetail>
 {
-    public void Configure(EntityTypeBuilder<PurPurchaseReturnDetail> builder)
+    protected override void ConfigureEntity(EntityTypeBuilder<PurPurchaseReturnDetail> builder)
     {
         builder.ToTable("Pur_PurchaseReturnDetail");
         builder.HasKey(e => e.Id);

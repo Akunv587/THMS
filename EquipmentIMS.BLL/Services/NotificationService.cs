@@ -66,13 +66,7 @@ public class NotificationService : INotificationService
             })
             .ToListAsync();
 
-        return new PagedResult<NotificationDto>
-        {
-            Items = items,
-            TotalCount = total,
-            Page = query.Page,
-            PageSize = query.PageSize
-        };
+        return PagedResult<NotificationDto>.Create(items, total, query.Page, query.PageSize);
     }
 
     public async Task<NotificationDto?> GetByIdAsync(long notificationId)

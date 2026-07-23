@@ -52,13 +52,7 @@ public class OperationLogService : IOperationLogService
             })
             .ToListAsync();
 
-        return new PagedResult<OperationLogDto>
-        {
-            Items = items,
-            TotalCount = total,
-            Page = query.Page,
-            PageSize = query.PageSize
-        };
+        return PagedResult<OperationLogDto>.Create(items, total, query.Page, query.PageSize);
     }
 
     public async Task<byte[]> ExportAsync(OperationLogQueryDto query)

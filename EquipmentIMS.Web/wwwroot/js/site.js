@@ -44,8 +44,34 @@ function ajaxPost(url, data, ok, fail) {
     var btn = document.activeElement;
     if (btn && btn.tagName === 'BUTTON') btnLoading(btn);
     $.ajax({
+        url: url, type: 'POST', data: data,
+        headers: { 'X-CSRF-TOKEN': getAntiForgeryToken() },
+        success: function (r) {
+            if (btn && btn.tagName === 'BUTTON') btnReset(btn);
+            if (r.success) { if (ok) ok(r); } else {
+                var em = r.message || '操作失败';
+                if (r.errors) { var a = []; for (var k in r.errors) a.push(r.errors[k]); em = a.join('<br>'); }
+                showError(em); if (fail) fail(r);
+            }
+        },
+        error: function (x) {
+            if (btn && btn.tagName === 'BUTTON') btnReset(btn);
+            var em = '系统繁忙，请稍后重试';
+            try { var r = JSON.parse(x.responseText); em = r.message || em; } catch (e) {}
+            if (x.status === 401) { window.location.href = '/Account/Login'; return; }
+            if (x.status === 403) em = '没有操作权限';
+            showError(em); if (fail) fail(x);
+        }
+    });
+}
+
+// ===== Ajax JSON POST (complex objects) =====
+function ajaxPostJson(url, data, ok, fail) {
+    var btn = document.activeElement;
+    if (btn && btn.tagName === 'BUTTON') btnLoading(btn);
+    $.ajax({
         url: url, type: 'POST', contentType: 'application/json', data: JSON.stringify(data),
-        headers: { 'RequestVerificationToken': getAntiForgeryToken() },
+        headers: { 'X-CSRF-TOKEN': getAntiForgeryToken() },
         success: function (r) {
             if (btn && btn.tagName === 'BUTTON') btnReset(btn);
             if (r.success) { if (ok) ok(r); } else {
@@ -206,7 +232,7 @@ $(document).on('click', function (e) {
     function poll() { $.ajax({ url: '/Notification/GetUnreadCount', type: 'GET', success: function (r) { if (r.success) updateBadge(r.data); } }); }
     $(document).on('show.bs.dropdown', '.notification-btn', function () { loadDropdown(); });
     window.markAllNotificationsRead = function () {
-        $.ajax({ url: '/Notification/MarkAllRead', type: 'POST', headers: { 'RequestVerificationToken': getAntiForgeryToken() },
+        $.ajax({ url: '/Notification/MarkAllRead', type: 'POST', headers: { 'X-CSRF-TOKEN': getAntiForgeryToken() },
             success: function (r) { if (r.success) { updateBadge(0); $('#notificationDropdownList').html('<div class="text-center py-4 text-muted small">暂无未读通知</div>'); } }
         });
     };
@@ -214,4 +240,4 @@ $(document).on('click', function (e) {
 })();
 
 // ===== Enter 键快速搜索 =====
-$(document).on('keydown', '.search-bar input', function (e) { if (e.key === 'Enter') { var btn = this.closest('.search-bar').querySelector('button[onclick^="doSearch"]'); if (btn) btn.click(); } });
+$(document).on('keydown', '.search-bar input', function (e) { if (e.key === 'Key.Enter') { var btn = this.closest('.search-bar').querySelector('button[onclick^="doSearch"]'); if (btn) btn.click(); } });

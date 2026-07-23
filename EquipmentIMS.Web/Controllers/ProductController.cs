@@ -148,7 +148,7 @@ public class ProductController : Controller
         for (int i = 0; i < 10; i++)
             sheet.SetColumnWidth(i, 4000);
 
-        workbook.Write(stream, leaveOpen: false);
+        workbook.Write(stream, leaveOpen: true);
         stream.Position = 0;
 
         return File(stream, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "设备导入模板.xlsx");

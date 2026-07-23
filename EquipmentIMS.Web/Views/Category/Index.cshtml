@@ -1,0 +1,72 @@
+@model List<EquipmentIMS.Models.DTOs.CategoryTreeDto>
+@{
+    ViewData["Title"] = "设备分类管理";
+}
+
+<div class="content-card">
+    <div class="content-header">
+        <h4><i class="bi bi-diagram-3 me-2"></i>设备分类管理</h4>
+        <a asp-action="Create" class="btn btn-primary btn-sm"><i class="bi bi-plus-lg me-1"></i>新增分类</a>
+    </div>
+
+    <div class="table-responsive mt-3">
+        <table class="table data-table">
+            <thead><tr>
+                <th>分类编码</th><th>分类名称</th><th>层级</th><th style="width:200px">操作</th>
+            </tr></thead>
+            <tbody>
+                @if (!Model.Any())
+                {
+                    <tr><td colspan="4" class="text-center text-muted py-4">暂无分类数据，请先新增</td></tr>
+                }
+                else
+                {
+                    @foreach (var item in Model)
+                    {
+                        @Html.Raw(RenderTree(item, 0))
+                    }
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+@functions {
+    string RenderTree(EquipmentIMS.Models.DTOs.CategoryTreeDto node, int level)
+    {
+        var indent = new string('—', level * 2);
+        var icon = node.Children.Any() ? "bi-folder" : "bi-tag";
+        var sb = new System.Text.StringBuilder();
+        sb.Append("<tr>");
+        sb.Append($"<td><i class=\"bi {icon} me-1\"></i>{indent} {node.Code}</td>");
+        sb.Append($"<td>{System.Net.WebUtility.HtmlEncode(node.Name)}</td>");
+        sb.Append($"<td>{node.Level + 1}</td>");
+        sb.Append("<td><div class=\"btn-group btn-group-sm\">");
+        sb.Append($"<a href=\"/Category/Edit/{node.Id}\" class=\"btn btn-outline-primary\" title=\"编辑\"><i class=\"bi bi-pencil\"></i></a>");
+        sb.Append($"<a href=\"/Category/Create?parentId={node.Id}\" class=\"btn btn-outline-success\" title=\"添加子分类\"><i class=\"bi bi-plus\"></i></a>");
+        sb.Append($"<button class=\"btn btn-outline-danger\" onclick=\"deleteCategory({node.Id})\" title=\"删除\"><i class=\"bi bi-trash\"></i></button>");
+        sb.Append("</div></td>");
+        sb.Append("</tr>");
+
+        if (node.Children.Any())
+        {
+            foreach (var child in node.Children)
+            {
+                sb.Append(RenderTree(child, level + 1));
+            }
+        }
+
+        return sb.ToString();
+    }
+}
+
+@section Scripts {
+    <script>
+        function deleteCategory(id) {
+            if (!confirm('确认删除该分类？如有子分类将一并删除。')) return;
+            ajaxPost('/Category/Delete', { id: id }, function (res) {
+                location.reload();
+            });
+        }
+    </script>
+}

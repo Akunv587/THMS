@@ -21,32 +21,42 @@ public class NumberGeneratorService : INumberGeneratorService
     {
         var date = DateTime.Now.ToString("yyyyMMdd");
         var resourceName = $"NR_{prefix}";
+        var strategy = _context.Database.CreateExecutionStrategy();
 
         for (var retry = 0; retry < MaxRetry; retry++)
         {
-            await using var transaction = await _context.Database.BeginTransactionAsync();
+            string? number = null;
             try
             {
-                await _context.Database.ExecuteSqlRawAsync(
-                    "EXEC sp_getapplock @Resource={0}, @LockMode='Exclusive', @LockOwner='Transaction', @LockTimeout=5000",
-                    resourceName);
+                await strategy.ExecuteAsync(async () =>
+                {
+                    await using var transaction = await _context.Database.BeginTransactionAsync();
+                    try
+                    {
+                        await _context.Database.ExecuteSqlRawAsync(
+                            "EXEC sp_getapplock @Resource={0}, @LockMode='Exclusive', @LockOwner='Transaction', @LockTimeout=5000",
+                            resourceName);
 
-                var likePattern = $"{prefix}-{date}-%";
-                var sql = string.Format(
-                    "SELECT MAX(CAST(SUBSTRING([{0}], LEN('{1}-{2}-') + 1, 4) AS INT)) FROM [{3}] WITH(NOLOCK) WHERE [{0}] LIKE @p0",
-                    columnName, prefix, date, tableName);
-                var result = await _context.Database
-                    .SqlQueryRaw<int?>(sql, likePattern)
-                    .FirstOrDefaultAsync();
+                        var likePattern = $"{prefix}-{date}-%";
+                        var sql = $"SELECT MAX(CAST(SUBSTRING([{columnName}], LEN('{prefix}-{date}-') + 1, 4) AS INT)) FROM [{tableName}] WITH(NOLOCK) WHERE [{columnName}] LIKE @p0";
+                        var result = await _context.Database
+                            .SqlQueryRaw<int?>(sql, likePattern)
+                            .FirstOrDefaultAsync();
 
-                var maxNo = (result ?? 0) + 1;
-                var number = $"{prefix}-{date}-{maxNo:D4}";
-                await transaction.CommitAsync();
-                return number;
+                        var maxNo = (result ?? 0) + 1;
+                        number = $"{prefix}-{date}-{maxNo:D4}";
+                        await transaction.CommitAsync();
+                    }
+                    catch
+                    {
+                        await transaction.RollbackAsync();
+                        throw;
+                    }
+                });
+                return number!;
             }
             catch (Exception) when (retry < MaxRetry - 1)
             {
-                await transaction.RollbackAsync();
                 await Task.Delay(Random.Shared.Next(50, 200));
             }
         }
@@ -58,32 +68,42 @@ public class NumberGeneratorService : INumberGeneratorService
     {
         var dateTimePart = DateTime.Now.ToString("yyyyMMddHHmmss");
         var resourceName = $"NR_{prefix}";
+        var strategy = _context.Database.CreateExecutionStrategy();
 
         for (var retry = 0; retry < MaxRetry; retry++)
         {
-            await using var transaction = await _context.Database.BeginTransactionAsync();
+            string? number = null;
             try
             {
-                await _context.Database.ExecuteSqlRawAsync(
-                    "EXEC sp_getapplock @Resource={0}, @LockMode='Exclusive', @LockOwner='Transaction', @LockTimeout=5000",
-                    resourceName);
+                await strategy.ExecuteAsync(async () =>
+                {
+                    await using var transaction = await _context.Database.BeginTransactionAsync();
+                    try
+                    {
+                        await _context.Database.ExecuteSqlRawAsync(
+                            "EXEC sp_getapplock @Resource={0}, @LockMode='Exclusive', @LockOwner='Transaction', @LockTimeout=5000",
+                            resourceName);
 
-                var likePattern = $"{prefix}-{dateTimePart}-%";
-                var sql = string.Format(
-                    "SELECT MAX(CAST(SUBSTRING([{0}], LEN('{1}-{2}-') + 1, 3) AS INT)) FROM [{3}] WHERE [{0}] LIKE @p0",
-                    columnName, prefix, dateTimePart, tableName);
-                var result = await _context.Database
-                    .SqlQueryRaw<int?>(sql, likePattern)
-                    .FirstOrDefaultAsync();
+                        var likePattern = $"{prefix}-{dateTimePart}-%";
+                        var sql = $"SELECT MAX(CAST(SUBSTRING([{columnName}], LEN('{prefix}-{dateTimePart}-') + 1, 3) AS INT)) FROM [{tableName}] WHERE [{columnName}] LIKE @p0";
+                        var result = await _context.Database
+                            .SqlQueryRaw<int?>(sql, likePattern)
+                            .FirstOrDefaultAsync();
 
-                var maxNo = (result ?? 0) + 1;
-                var number = $"{prefix}-{dateTimePart}-{maxNo:D3}";
-                await transaction.CommitAsync();
-                return number;
+                        var maxNo = (result ?? 0) + 1;
+                        number = $"{prefix}-{dateTimePart}-{maxNo:D3}";
+                        await transaction.CommitAsync();
+                    }
+                    catch
+                    {
+                        await transaction.RollbackAsync();
+                        throw;
+                    }
+                });
+                return number!;
             }
             catch (Exception) when (retry < MaxRetry - 1)
             {
-                await transaction.RollbackAsync();
                 await Task.Delay(Random.Shared.Next(50, 200));
             }
         }

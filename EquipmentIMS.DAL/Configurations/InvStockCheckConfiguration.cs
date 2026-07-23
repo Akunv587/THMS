@@ -4,9 +4,9 @@ using EquipmentIMS.Models.Entities;
 
 namespace EquipmentIMS.DAL.Configurations;
 
-public class InvStockCheckConfiguration : IEntityTypeConfiguration<InvStockCheck>
+public class InvStockCheckConfiguration : BaseEntityConfiguration<InvStockCheck>
 {
-    public void Configure(EntityTypeBuilder<InvStockCheck> builder)
+    protected override void ConfigureEntity(EntityTypeBuilder<InvStockCheck> builder)
     {
         builder.ToTable("Inv_StockCheck");
         builder.HasKey(e => e.Id);
@@ -18,6 +18,5 @@ public class InvStockCheckConfiguration : IEntityTypeConfiguration<InvStockCheck
         builder.Property(e => e.Remark).HasMaxLength(500);
         builder.HasOne(e => e.Warehouse).WithMany().HasForeignKey(e => e.WarehouseId);
         builder.HasMany(e => e.Details).WithOne(d => d.StockCheck).HasForeignKey(d => d.StockCheckId);
-        builder.HasQueryFilter(e => !e.IsDeleted);
     }
 }

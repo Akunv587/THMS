@@ -22,13 +22,7 @@ public class SupplierService : ISupplierService
         var result = await _repo.GetPagedAsync(page, pageSize, string.IsNullOrWhiteSpace(keyword) ? null :
             s => (!s.IsDeleted) && (s.Code.Contains(keyword) || s.Name.Contains(keyword)));
 
-        return new PagedResult<SupplierDto>
-        {
-            Items = result.Items.Select(MapToDto).ToList(),
-            TotalCount = result.TotalCount,
-            Page = result.Page,
-            PageSize = result.PageSize
-        };
+        return PagedResult<SupplierDto>.Create(result.Items.Select(MapToDto).ToList(), result.TotalCount, result.Page, result.PageSize);
     }
 
     public async Task<List<SupplierDto>> GetAllAsync(string? keyword = null)

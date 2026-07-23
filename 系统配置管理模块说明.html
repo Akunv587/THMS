@@ -1,0 +1,769 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>系统配置管理模块 - 设备库存管理系统 (EquipmentIMS)</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #0d6efd;
+            --primary-light: #e7f1ff;
+            --success: #198754;
+            --warning: #ffc107;
+            --info: #0dcaf0;
+            --gray-100: #f8f9fa;
+            --gray-200: #e9ecef;
+            --gray-600: #6c757d;
+            --gray-800: #343a40;
+            --border-radius: 12px;
+        }
+        * { box-sizing: border-box; }
+        body { background: linear-gradient(135deg, #f0f4f8 0%, #e9ecef 100%); font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; min-height: 100vh; }
+
+        /* Hero */
+        .hero { background: linear-gradient(135deg, #0d6efd 0%, #084298 100%); color: #fff; padding: 48px 0 40px; text-align: center; position: relative; overflow: hidden; }
+        .hero::before { content: ''; position: absolute; top: -50%; left: -50%; width: 200%; height: 200%; background: radial-gradient(circle at 70% 30%, rgba(255,255,255,0.08) 0%, transparent 60%); }
+        .hero h1 { font-weight: 700; font-size: 2rem; position: relative; }
+        .hero p { opacity: 0.9; font-size: 1.05rem; max-width: 700px; margin: 12px auto 0; position: relative; }
+
+        /* Container */
+        .container-main { max-width: 1100px; margin: -24px auto 40px; padding: 0 16px; position: relative; }
+
+        /* Cards */
+        .section-card { background: #fff; border-radius: var(--border-radius); box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 4px 16px rgba(0,0,0,0.04); margin-bottom: 24px; overflow: hidden; }
+        .section-header { padding: 20px 28px; border-bottom: 1px solid var(--gray-200); display: flex; align-items: center; gap: 12px; }
+        .section-header i { font-size: 1.4rem; color: var(--primary); }
+        .section-header h2 { font-size: 1.2rem; font-weight: 700; margin: 0; color: var(--gray-800); }
+        .section-body { padding: 24px 28px; }
+
+        /* Badge */
+        .type-badge { display: inline-block; padding: 2px 10px; border-radius: 20px; font-size: 0.78rem; font-weight: 600; }
+        .type-string { background: #e3f2fd; color: #1565c0; }
+        .type-number { background: #e8f5e9; color: #2e7d32; }
+        .type-boolean { background: #fff3e0; color: #e65100; }
+        .type-json { background: #f3e5f5; color: #6a1b9a; }
+
+        /* Group Card */
+        .group-card { border: 1px solid var(--gray-200); border-radius: 10px; margin-bottom: 16px; overflow: hidden; transition: box-shadow 0.2s; }
+        .group-card:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+        .group-card-header { background: var(--gray-100); padding: 12px 20px; display: flex; align-items: center; gap: 10px; cursor: pointer; user-select: none; }
+        .group-card-header i { font-size: 1.2rem; }
+        .group-card-header .group-title { font-weight: 600; font-size: 1rem; }
+        .group-card-header .group-count { margin-left: auto; }
+        .group-card-body { padding: 0 20px; }
+        .group-card-body table { margin-bottom: 0; }
+        .group-card-body th { font-size: 0.82rem; font-weight: 600; color: var(--gray-600); border-top: none; }
+        .group-card-body td { font-size: 0.9rem; vertical-align: middle; padding: 10px 12px; }
+        .group-card-body code { font-size: 0.82rem; background: var(--primary-light); padding: 2px 8px; border-radius: 4px; }
+
+        /* Feature Grid */
+        .feature-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 16px; }
+        .feature-item { background: var(--gray-100); border-radius: 10px; padding: 20px; text-align: center; }
+        .feature-item i { font-size: 2rem; color: var(--primary); margin-bottom: 10px; display: block; }
+        .feature-item h5 { font-size: 0.95rem; font-weight: 700; margin-bottom: 6px; }
+        .feature-item p { font-size: 0.85rem; color: var(--gray-600); margin: 0; }
+
+        /* Two Column */
+        .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        @media (max-width: 768px) { .two-col { grid-template-columns: 1fr; } }
+
+        /* Process */
+        .process-steps { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
+        .process-step { text-align: center; flex: 1; min-width: 140px; }
+        .process-step .step-num { width: 40px; height: 40px; background: var(--primary); color: #fff; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; margin: 0 auto 8px; }
+        .process-step .step-title { font-weight: 600; font-size: 0.9rem; }
+        .process-step .step-desc { font-size: 0.8rem; color: var(--gray-600); }
+
+        /* Accordion Custom */
+        .custom-accordion .accordion-button { font-weight: 600; background: var(--gray-100); }
+        .custom-accordion .accordion-button:not(.collapsed) { background: var(--primary-light); color: var(--primary); }
+        .custom-accordion .accordion-body { padding: 20px; }
+
+        /* Timeline */
+        .timeline { position: relative; padding-left: 30px; }
+        .timeline::before { content: ''; position: absolute; left: 8px; top: 0; bottom: 0; width: 2px; background: var(--gray-200); }
+        .timeline-item { position: relative; margin-bottom: 20px; }
+        .timeline-item::before { content: ''; position: absolute; left: -26px; top: 4px; width: 12px; height: 12px; border-radius: 50%; background: var(--primary); border: 2px solid #fff; box-shadow: 0 0 0 2px var(--primary); }
+        .timeline-item h6 { margin: 0; font-weight: 700; font-size: 0.92rem; }
+        .timeline-item p { margin: 4px 0 0; font-size: 0.85rem; color: var(--gray-600); }
+
+        /* Footer */
+        .footer { text-align: center; color: var(--gray-600); font-size: 0.82rem; padding: 20px 0; }
+
+        /* Code Block */
+        .code-block { background: #1e1e1e; color: #d4d4d4; border-radius: 8px; padding: 16px 20px; font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace; font-size: 0.85rem; line-height: 1.6; overflow-x: auto; }
+        .code-block .kw { color: #569cd6; }
+        .code-block .str { color: #ce9178; }
+        .code-block .cmt { color: #6a9955; }
+        .code-block .num { color: #b5cea8; }
+
+        /* Page mockup */
+        .page-mockup { border: 1px solid var(--gray-200); border-radius: 10px; overflow: hidden; }
+        .page-mockup-header { background: var(--gray-100); padding: 10px 16px; display: flex; gap: 6px; align-items: center; }
+        .page-mockup-dot { width: 10px; height: 10px; border-radius: 50%; }
+        .page-mockup-body { padding: 20px; }
+        .mock-table { width: 100%; border-collapse: collapse; }
+        .mock-table th { background: var(--gray-100); text-align: left; padding: 8px 12px; font-size: 0.82rem; font-weight: 600; color: var(--gray-600); }
+        .mock-table td { padding: 8px 12px; font-size: 0.85rem; border-bottom: 1px solid var(--gray-200); }
+        .mock-accordion { border: 1px solid var(--gray-200); border-radius: 6px; margin-bottom: 8px; }
+        .mock-accordion-header { background: var(--gray-100); padding: 10px 16px; font-weight: 600; font-size: 0.9rem; display: flex; align-items: center; gap: 8px; }
+        .mock-accordion-body { padding: 12px 16px; border-top: 1px solid var(--gray-200); }
+    </style>
+</head>
+<body>
+
+<!-- ===== Hero ===== -->
+<div class="hero">
+    <h1><i class="bi bi-sliders2-vertical me-2"></i>系统配置管理模块</h1>
+    <p>设备库存管理系统 (EquipmentIMS) 中负责全局参数集中管理的核心模块。<br>通过键值对 (Key-Value) 方式统一存储和分发系统级配置，实现业务逻辑与运行参数的解耦。</p>
+</div>
+
+<div class="container-main">
+
+<!-- ===== 1. 整体架构 ===== -->
+<div class="section-card">
+    <div class="section-header">
+        <i class="bi bi-diagram-3"></i>
+        <h2>一、模块架构与定位</h2>
+    </div>
+    <div class="section-body">
+        <p class="mb-3">系统配置模块采用 <strong>分层架构</strong>，贯穿表现层 (Web)、业务逻辑层 (BLL) 和数据访问层 (DAL)：</p>
+
+        <div class="process-steps mb-4">
+            <div class="process-step">
+                <div class="step-num">1</div>
+                <div class="step-title">SysConfig 实体</div>
+                <div class="step-desc">Models 层<br>数据库表映射</div>
+            </div>
+            <div class="process-step">
+                <div class="step-num">2</div>
+                <div class="step-title">SystemConfigService</div>
+                <div class="step-desc">BLL 层<br>缓存 + 读写逻辑</div>
+            </div>
+            <div class="process-step">
+                <div class="step-num">3</div>
+                <div class="step-title">SystemConfigController</div>
+                <div class="step-desc">Web 层<br>分组映射 + 页面</div>
+            </div>
+            <div class="process-step">
+                <div class="step-num">4</div>
+                <div class="step-title">Razor Views</div>
+                <div class="step-desc">前端<br>Index 预览 / Edit 编辑</div>
+            </div>
+        </div>
+
+        <div class="two-col">
+            <div class="feature-item">
+                <i class="bi bi-database"></i>
+                <h5>Sys_Config 表</h5>
+                <p>存储于 SQL Server 中，以 <code>ConfigKey</code> 为唯一标识的键值对</p>
+            </div>
+            <div class="feature-item">
+                <i class="bi bi-cpu"></i>
+                <h5>IMemoryCache 缓存</h5>
+                <p>每个配置项独立缓存 30 分钟，首次读取后缓存在内存中</p>
+            </div>
+            <div class="feature-item">
+                <i class="bi bi-shield-lock"></i>
+                <h5>权限分级</h5>
+                <p><code>sys:config:view</code> 可查看 / <code>sys:config:edit</code> 可修改</p>
+            </div>
+            <div class="feature-item">
+                <i class="bi bi-files"></i>
+                <h5>分组展示</h5>
+                <p>按业务域自动分组：公司信息 / 单据设置 / 安全策略 / 预警设置</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ===== 2. 实体模型 ===== -->
+<div class="section-card">
+    <div class="section-header">
+        <i class="bi bi-table"></i>
+        <h2>二、数据模型 — Sys_Config 表</h2>
+    </div>
+    <div class="section-body">
+        <p>配置项实体 <code>SysConfig</code> 映射到数据库表 <code>Sys_Config</code>，结构如下：</p>
+        <table class="table table-bordered" style="font-size:0.9rem;">
+            <thead class="table-light">
+                <tr><th>字段</th><th>类型</th><th>说明</th></tr>
+            </thead>
+            <tbody>
+                <tr><td><code>Id</code></td><td>bigint (PK)</td><td>自增主键</td></tr>
+                <tr><td><code>ConfigKey</code></td><td>nvarchar(100)</td><td>配置键（唯一标识），如 <code>CompanyName</code></td></tr>
+                <tr><td><code>ConfigValue</code></td><td>nvarchar(2000)</td><td>配置值，以小文本或 JSON 存储</td></tr>
+                <tr><td><code>ConfigName</code></td><td>nvarchar(100)</td><td>中文显示名称，如"公司名称"</td></tr>
+                <tr><td><code>Description</code></td><td>nvarchar(500)</td><td>用途说明，页面以 Tooltip 展示</td></tr>
+                <tr><td><code>ConfigType</code></td><td>tinyint (枚举)</td><td>数据类型：1=字符串, 2=数字, 3=布尔, 4=JSON</td></tr>
+                <tr><td><code>IsEditable</code></td><td>bit</td><td>是否允许用户编辑</td></tr>
+                <tr><td><code>CreateTime</code></td><td>datetime2</td><td>创建时间</td></tr>
+                <tr><td><code>CreateBy</code></td><td>nvarchar(50)</td><td>创建人</td></tr>
+                <tr><td><code>UpdateTime</code></td><td>datetime2</td><td>最后更新时间</td></tr>
+            </tbody>
+        </table>
+        <p class="text-muted mt-2"><i class="bi bi-info-circle me-1"></i>ConfigKey 命名采用 PascalCase 规范，前缀体现所属业务域（如 <code>DocPrefix_</code> 为单据前缀类）。</p>
+    </div>
+</div>
+
+<!-- ===== 3. 配置项分类体系 ===== -->
+<div class="section-card">
+    <div class="section-header">
+        <i class="bi bi-collection"></i>
+        <h2>三、配置项分类体系与详解</h2>
+    </div>
+    <div class="section-body">
+        <p>系统将所有配置项按<strong>业务域</strong>划分为 <span class="badge bg-primary">4 大分组</span>（外加兜底的"其他设置"），每组在页面上以 Bootstrap Icons 图标标识：</p>
+
+        <!-- Group 1: 公司信息 -->
+        <div class="group-card">
+            <div class="group-card-header">
+                <i class="bi bi-building text-primary"></i>
+                <span class="group-title">公司信息</span>
+                <span class="badge bg-primary group-count">4 项</span>
+            </div>
+            <div class="group-card-body">
+                <table class="table">
+                    <thead><tr><th style="width:22%">ConfigKey</th><th style="width:15%">名称</th><th style="width:15%">类型</th><th style="width:18%">默认值</th><th>用途说明</th></tr></thead>
+                    <tbody>
+                        <tr>
+                            <td><code>CompanyName</code></td>
+                            <td>公司名称</td>
+                            <td><span class="type-badge type-string">字符串</span></td>
+                            <td>郑州恒锐自动化设备有限公司</td>
+                            <td>企业全称，用于报表抬头、登录页面标题、系统各处显示的机构名称</td>
+                        </tr>
+                        <tr>
+                            <td><code>CompanyAddress</code></td>
+                            <td>公司地址</td>
+                            <td><span class="type-badge type-string">字符串</span></td>
+                            <td>(空)</td>
+                            <td>经营地址，用于采购单/销售单等正式单据的落款区域</td>
+                        </tr>
+                        <tr>
+                            <td><code>CompanyPhone</code></td>
+                            <td>联系方式</td>
+                            <td><span class="type-badge type-string">字符串</span></td>
+                            <td>(空)</td>
+                            <td>联系电话/传真，出现在对外单据的联系信息栏</td>
+                        </tr>
+                        <tr>
+                            <td><code>CompanyEmail</code></td>
+                            <td>电子邮箱</td>
+                            <td><span class="type-badge type-string">字符串</span></td>
+                            <td>(空)</td>
+                            <td>企业邮箱，用于系统通知发件人和对外联络信息显示</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Group 2: 单据设置 -->
+        <div class="group-card">
+            <div class="group-card-header">
+                <i class="bi bi-file-text text-success"></i>
+                <span class="group-title">单据设置</span>
+                <span class="badge bg-success group-count">5+ 项</span>
+            </div>
+            <div class="group-card-body">
+                <table class="table">
+                    <thead><tr><th style="width:22%">ConfigKey</th><th style="width:15%">名称</th><th style="width:15%">类型</th><th style="width:18%">默认值</th><th>用途说明</th></tr></thead>
+                    <tbody>
+                        <tr>
+                            <td><code>Prefix_PurchaseOrder</code></td>
+                            <td>采购订单前缀</td>
+                            <td><span class="type-badge type-string">字符串</span></td>
+                            <td>PUR / CG</td>
+                            <td>采购订单编号的前缀，如 PUR20260718001。与流水号拼接生成唯一单据号</td>
+                        </tr>
+                        <tr>
+                            <td><code>Prefix_SaleOrder</code></td>
+                            <td>销售订单前缀</td>
+                            <td><span class="type-badge type-string">字符串</span></td>
+                            <td>SALE / XS</td>
+                            <td>销售订单编号的前缀，用于快速区分单据类型</td>
+                        </tr>
+                        <tr>
+                            <td><code>Prefix_PurchaseIn</code></td>
+                            <td>采购入库前缀</td>
+                            <td><span class="type-badge type-string">字符串</span></td>
+                            <td>(自定义)</td>
+                            <td>采购入库单编号前缀</td>
+                        </tr>
+                        <tr>
+                            <td><code>Prefix_SaleOut</code></td>
+                            <td>销售出库前缀</td>
+                            <td><span class="type-badge type-string">字符串</span></td>
+                            <td>(自定义)</td>
+                            <td>销售出库单编号前缀</td>
+                        </tr>
+                        <tr>
+                            <td><code>Prefix_RepairOrder</code></td>
+                            <td>维修工单前缀</td>
+                            <td><span class="type-badge type-string">字符串</span></td>
+                            <td>(自定义)</td>
+                            <td>维修工单编号前缀</td>
+                        </tr>
+                        <tr>
+                            <td><code>Prefix_Transfer</code></td>
+                            <td>调拨单前缀</td>
+                            <td><span class="type-badge type-string">字符串</span></td>
+                            <td>TRF / DB</td>
+                            <td>库存调拨单编号前缀</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Group 3: 安全策略 -->
+        <div class="group-card">
+            <div class="group-card-header">
+                <i class="bi bi-shield-check text-warning"></i>
+                <span class="group-title">安全策略</span>
+                <span class="badge bg-warning text-dark group-count">5 项</span>
+            </div>
+            <div class="group-card-body">
+                <table class="table">
+                    <thead><tr><th style="width:22%">ConfigKey</th><th style="width:15%">名称</th><th style="width:15%">类型</th><th style="width:18%">默认值</th><th>用途说明</th></tr></thead>
+                    <tbody>
+                        <tr>
+                            <td><code>PasswordExpiryDays</code></td>
+                            <td>密码过期天数</td>
+                            <td><span class="type-badge type-number">数字</span></td>
+                            <td>90</td>
+                            <td>用户密码的有效天数。设为 <strong>0</strong> 表示密码永不过期。到期后系统强制要求修改密码</td>
+                        </tr>
+                        <tr>
+                            <td><code>MaxLoginAttempts</code></td>
+                            <td>最大登录失败次数</td>
+                            <td><span class="type-badge type-number">数字</span></td>
+                            <td>5</td>
+                            <td>连续登录失败达到此次数后，账户将被临时锁定。用于防止暴力破解</td>
+                        </tr>
+                        <tr>
+                            <td><code>LockoutMinutes</code></td>
+                            <td>锁定时间（分钟）</td>
+                            <td><span class="type-badge type-number">数字</span></td>
+                            <td>30</td>
+                            <td>账户被锁定后的自动解锁等待时长。30 分钟后可重新尝试登录</td>
+                        </tr>
+                        <tr>
+                            <td><code>PasswordHistoryCount</code></td>
+                            <td>密码历史数量</td>
+                            <td><span class="type-badge type-number">数字</span></td>
+                            <td>5</td>
+                            <td>禁止重复使用的历史密码数量。修改密码时不能与最近 N 次密码相同</td>
+                        </tr>
+                        <tr>
+                            <td><code>CreditCheckEnabled</code></td>
+                            <td>信用额度检查开关</td>
+                            <td><span class="type-badge type-boolean">布尔</span></td>
+                            <td>false (禁用)</td>
+                            <td>是否启用客户信用额度检查。启用后超出信用额度的客户将无法继续赊销</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Group 4: 预警设置 -->
+        <div class="group-card">
+            <div class="group-card-header">
+                <i class="bi bi-bell text-danger"></i>
+                <span class="group-title">预警设置</span>
+                <span class="badge bg-danger group-count">4 项</span>
+            </div>
+            <div class="group-card-body">
+                <table class="table">
+                    <thead><tr><th style="width:22%">ConfigKey</th><th style="width:15%">名称</th><th style="width:15%">类型</th><th style="width:18%">默认值</th><th>用途说明</th></tr></thead>
+                    <tbody>
+                        <tr>
+                            <td><code>StockAlertCheckCron</code></td>
+                            <td>库存预警检查时间</td>
+                            <td><span class="type-badge type-string">字符串</span></td>
+                            <td>08:00</td>
+                            <td>每日低库存预警的自动检查时间（格式 HH:mm）。后台定时服务在此时间扫描库存</td>
+                        </tr>
+                        <tr>
+                            <td><code>MaintenanceReminderDays</code></td>
+                            <td>保养提前提醒天数</td>
+                            <td><span class="type-badge type-number">数字</span></td>
+                            <td>(自定义)</td>
+                            <td>设备保养到期前 N 天开始发送提醒通知，确保维护工作及时执行</td>
+                        </tr>
+                        <tr>
+                            <td><code>StockAlertLowQty</code></td>
+                            <td>库存预警低阈值</td>
+                            <td><span class="type-badge type-number">数字</span></td>
+                            <td>10</td>
+                            <td>某设备库存数量低于此值时触发"低库存预警"，提示采购补货</td>
+                        </tr>
+                        <tr>
+                            <td><code>StockAlertHighDays</code></td>
+                            <td>库存积压天数</td>
+                            <td><span class="type-badge type-number">数字</span></td>
+                            <td>90</td>
+                            <td>库存存放天数超过此值时触发"库存积压预警"，提示促销或调拨处理</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ===== 4. 数据类型说明 ===== -->
+<div class="section-card">
+    <div class="section-header">
+        <i class="bi bi-tag"></i>
+        <h2>四、配置项数据类型</h2>
+    </div>
+    <div class="section-body">
+        <p>系统定义了 <code>ConfigType</code> 枚举（1~4），不同数据类型在页面上渲染为<strong>不同的表单控件</strong>：</p>
+
+        <div class="feature-grid">
+            <div class="feature-item">
+                <i class="bi bi-type" style="color:#1565c0;"></i>
+                <h5>String (1) — 字符串</h5>
+                <p><span class="type-badge type-string">单行文本</span></p>
+                <p class="mt-2">渲染为 <code>&lt;input type="text"&gt;</code>。<br>用于公司名称、地址、单据前缀等</p>
+            </div>
+            <div class="feature-item">
+                <i class="bi bi-123" style="color:#2e7d32;"></i>
+                <h5>Number (2) — 数字</h5>
+                <p><span class="type-badge type-number">数字输入框</span></p>
+                <p class="mt-2">渲染为 <code>&lt;input type="number"&gt;</code>。<br>用于阈值、天数、次数等整数参数</p>
+            </div>
+            <div class="feature-item">
+                <i class="bi bi-toggle-on" style="color:#e65100;"></i>
+                <h5>Boolean (3) — 布尔开关</h5>
+                <p><span class="type-badge type-boolean">Toggle 开关</span></p>
+                <p class="mt-2">渲染为 Bootstrap 风格 Switch 开关。<br>绿色="启用" / 灰色="禁用"</p>
+            </div>
+            <div class="feature-item">
+                <i class="bi bi-braces" style="color:#6a1b9a;"></i>
+                <h5>Json (4) — 复杂对象</h5>
+                <p><span class="type-badge type-json">多行文本框</span></p>
+                <p class="mt-2">渲染为 <code>&lt;textarea&gt;</code>。<br>用于需结构化存储的复杂配置</p>
+            </div>
+        </div>
+
+        <div class="mt-4 p-3 bg-light rounded">
+            <strong><i class="bi bi-lightbulb me-1"></i>隐式类型转换：</strong>
+            <code>SystemConfigService.GetAsync&lt;T&gt;(key)</code> 支持通过 <strong>System.Text.Json</strong> 将 ConfigValue 反序列化为任意 CLR 类型。例如，一个存为 JSON 字符串的配置项可以透明地反序列化为 C# 对象供业务层使用。
+        </div>
+    </div>
+</div>
+
+<!-- ===== 5. Index 页面说明 ===== -->
+<div class="section-card">
+    <div class="section-header">
+        <i class="bi bi-eye"></i>
+        <h2>五、页面一：配置预览页（Index）</h2>
+    </div>
+    <div class="section-body">
+        <div class="two-col">
+            <div>
+                <h5><span class="badge bg-info me-2">只读</span>功能定位</h5>
+                <p>Index 页面是配置的<strong>只读预览视图</strong>，以卡片+表格的形式按分组展示所有配置项及其当前值。任何拥有 <code>sys:config:view</code> 权限的用户均可访问。</p>
+                <ul class="list-unstyled">
+                    <li class="mb-2"><i class="bi bi-check2-circle text-success me-1"></i> 按配置分组（公司信息→单据设置→安全策略→预警设置）顺序展示</li>
+                    <li class="mb-2"><i class="bi bi-check2-circle text-success me-1"></i> 每组以卡片形式呈现，头部显示图标 + 名称 + 项数</li>
+                    <li class="mb-2"><i class="bi bi-check2-circle text-success me-1"></i> 表格列：配置键 → 名称 → 当前值 → 说明</li>
+                    <li class="mb-2"><i class="bi bi-check2-circle text-success me-1"></i> 布尔值显示为绿色"启用"或灰色"禁用"标签</li>
+                    <li class="mb-2"><i class="bi bi-check2-circle text-success me-1"></i> 空值显示为灰色 "(空)"</li>
+                    <li class="mb-2"><i class="bi bi-check2-circle text-success me-1"></i> 顶部有"编辑配置"按钮（需 <code>sys:config:edit</code> 权限）</li>
+                </ul>
+            </div>
+            <div>
+                <h5 class="text-muted">页面布局示意</h5>
+                <div class="page-mockup">
+                    <div class="page-mockup-header">
+                        <div class="page-mockup-dot" style="background:#ff5f57;"></div>
+                        <div class="page-mockup-dot" style="background:#febc2e;"></div>
+                        <div class="page-mockup-dot" style="background:#28c840;"></div>
+                        <span class="ms-2 small text-muted">系统配置 — /SystemConfig</span>
+                    </div>
+                    <div class="page-mockup-body p-3">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <strong><i class="bi bi-gear me-1"></i>系统配置管理</strong>
+                            <span class="badge bg-primary">编辑配置</span>
+                        </div>
+                        <div style="background:#f8f9fa;padding:8px 12px;border-radius:6px;margin-bottom:8px;font-size:0.85rem;">
+                            <i class="bi bi-building text-primary me-1"></i><strong>公司信息</strong>
+                            <span class="badge bg-secondary ms-2">4 项</span>
+                        </div>
+                        <table class="mock-table mb-3">
+                            <tr><th>配置键</th><th>名称</th><th>当前值</th><th>说明</th></tr>
+                            <tr><td><code>CompanyName</code></td><td>公司名称</td><td>郑州恒锐自动化...</td><td>企业全称</td></tr>
+                            <tr><td><code>CompanyAddress</code></td><td>公司地址</td><td class="text-muted">(空)</td><td>公司地址</td></tr>
+                        </table>
+                        <div style="background:#f8f9fa;padding:8px 12px;border-radius:6px;margin-bottom:8px;font-size:0.85rem;">
+                            <i class="bi bi-shield-check text-warning me-1"></i><strong>安全策略</strong>
+                            <span class="badge bg-secondary ms-2">5 项</span>
+                        </div>
+                        <table class="mock-table">
+                            <tr><th>配置键</th><th>名称</th><th>当前值</th><th>说明</th></tr>
+                            <tr><td><code>PasswordExpiryDays</code></td><td>密码过期天数</td><td>90</td><td>0=不限制</td></tr>
+                            <tr><td><code>CreditCheckEnabled</code></td><td>信用额度检查</td><td><span class="badge bg-secondary">禁用</span></td><td>是否启用</td></tr>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ===== 6. Edit 页面说明 ===== -->
+<div class="section-card">
+    <div class="section-header">
+        <i class="bi bi-pencil-square"></i>
+        <h2>六、页面二：配置编辑页（Edit）</h2>
+    </div>
+    <div class="section-body">
+        <div class="two-col">
+            <div>
+                <h5><span class="badge bg-warning text-dark me-2">编辑</span>功能定位</h5>
+                <p>Edit 页面是配置的<strong>可编辑表单视图</strong>，采用 <strong>Bootstrap Accordion（手风琴）</strong>组件按分组折叠展示。需要 <code>sys:config:edit</code> 权限才能访问。</p>
+                <ul class="list-unstyled">
+                    <li class="mb-2"><i class="bi bi-chevron-right text-primary me-1"></i> 使用 <strong>Accordion 手风琴组件</strong>，首组默认展开，其余折叠</li>
+                    <li class="mb-2"><i class="bi bi-chevron-right text-primary me-1"></i> 根据 <code>ConfigType</code> 自动渲染不同控件（文本框/数字框/开关/文本域）</li>
+                    <li class="mb-2"><i class="bi bi-chevron-right text-primary me-1"></i> <code>IsEditable=false</code> 的配置项会以 <code>disabled</code> 状态显示</li>
+                    <li class="mb-2"><i class="bi bi-chevron-right text-primary me-1"></i> 支持 <strong>AJAX 批量提交</strong>，保存后自动清除缓存并跳转预览页</li>
+                    <li class="mb-2"><i class="bi bi-chevron-right text-primary me-1"></i> 隐含反伪造令牌 (AntiForgeryToken) 保护</li>
+                </ul>
+            </div>
+            <div>
+                <h5 class="text-muted">Accordion 编辑布局示意</h5>
+                <div class="page-mockup">
+                    <div class="page-mockup-header">
+                        <div class="page-mockup-dot" style="background:#ff5f57;"></div>
+                        <div class="page-mockup-dot" style="background:#febc2e;"></div>
+                        <div class="page-mockup-dot" style="background:#28c840;"></div>
+                        <span class="ms-2 small text-muted">编辑系统配置 — /SystemConfig/Edit</span>
+                    </div>
+                    <div class="page-mockup-body p-3">
+                        <div class="mock-accordion">
+                            <div class="mock-accordion-header" style="background:#e7f1ff;">
+                                <i class="bi bi-building text-primary"></i> 公司信息
+                                <span class="badge bg-secondary ms-2">4 项</span>
+                            </div>
+                            <div class="mock-accordion-body">
+                                <div class="mb-2"><strong>公司名称</strong><br><code>CompanyName</code><br><input class="form-control form-control-sm mt-1" value="郑州恒锐自动化设备有限公司" style="border:1px solid #ddd;"></div>
+                                <div><strong>联系方式</strong><br><code>CompanyPhone</code><br><input class="form-control form-control-sm mt-1" placeholder="请输入联系电话" style="border:1px solid #ddd;"></div>
+                            </div>
+                        </div>
+                        <div class="mock-accordion">
+                            <div class="mock-accordion-header">
+                                <i class="bi bi-shield-check text-warning"></i> 安全策略
+                                <span class="badge bg-secondary ms-2">5 项</span>
+                            </div>
+                            <div class="mock-accordion-body">
+                                <div class="mb-2"><strong>密码过期天数</strong><br><input class="form-control form-control-sm mt-1" type="number" value="90" style="border:1px solid #ddd;"></div>
+                                <div><strong>信用额度检查开关</strong><br><span class="badge bg-secondary" style="font-size:0.8rem;">禁用 ⬜</span></div>
+                            </div>
+                        </div>
+                        <div class="text-end mt-3">
+                            <span class="badge bg-light text-dark border me-2">取消</span>
+                            <span class="badge bg-primary">保存配置</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="mt-4">
+            <h6><i class="bi bi-code-slash me-1"></i>表单提交机制</h6>
+            <p>Edit 页面使用 <strong>AJAX 异步提交</strong>，通过 jQuery 序列化整个表单，利用 <code>Dictionary&lt;string, string&gt;</code> 接收所有配置键值对。控制器内部 <code>__</code> 开头的键（如 AntiForgeryToken）会被自动过滤，然后逐键调用 <code>SetAsync()</code> 更新。提交完成后自动清除 <code>SysConfig:*</code> 前缀的缓存键。</p>
+        </div>
+    </div>
+</div>
+
+<!-- ===== 7. 缓存机制 ===== -->
+<div class="section-card">
+    <div class="section-header">
+        <i class="bi bi-lightning-charge"></i>
+        <h2>七、缓存机制与性能优化</h2>
+    </div>
+    <div class="section-body">
+        <p>系统配置是典型的<strong>"读多写少"</strong>场景——运行期间频繁读取、极少修改。为提高性能，采用 <strong>ASP.NET Core IMemoryCache</strong> 实现本地内存缓存：</p>
+
+        <div class="feature-grid mb-4">
+            <div class="feature-item">
+                <i class="bi bi-hourglass-split"></i>
+                <h5>30 分钟过期</h5>
+                <p><code>CacheDuration = 30min</code><br>每个键独立缓存，到期自动失效</p>
+            </div>
+            <div class="feature-item">
+                <i class="bi bi-key"></i>
+                <h5>键名隔离</h5>
+                <p>缓存键格式 <code>SysConfig:{key}</code><br>与其他缓存数据不冲突</p>
+            </div>
+            <div class="feature-item">
+                <i class="bi bi-arrow-repeat"></i>
+                <h5>写入即刷新</h5>
+                <p><code>SetAsync</code> 后立即更新对应缓存<br>不需要等待自然过期</p>
+            </div>
+            <div class="feature-item">
+                <i class="bi bi-trash"></i>
+                <h5>批量清除</h5>
+                <p><code>RemoveByPattern("SysConfig:")</code><br>编辑后一键清除所有配置缓存</p>
+            </div>
+        </div>
+
+        <h6><i class="bi bi-arrow-left-right me-1"></i>缓存工作流程</h6>
+        <div class="timeline">
+            <div class="timeline-item">
+                <h6>1. 首次读取</h6>
+                <p>业务代码调用 <code>GetAsync("CompanyName")</code> → 缓存未命中 → 查询 <code>Sys_Config</code> 表 → 写入 IMemoryCache → 返回</p>
+            </div>
+            <div class="timeline-item">
+                <h6>2. 30 分钟内再次读取</h6>
+                <p>缓存命中 → 直接返回内存中的值，<strong>完全不访问数据库</strong></p>
+            </div>
+            <div class="timeline-item">
+                <h6>3. 编辑保存</h6>
+                <p>写入数据库 → 更新对应缓存 → 清除整个 <code>SysConfig:*</code> 命名空间 → 下次读取从 DB 重新加载</p>
+            </div>
+            <div class="timeline-item">
+                <h6>4. 30 分钟后自动过期</h6>
+                <p>缓存条目被 GC 回收 → 下次读取重新查库并缓存</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ===== 8. 权限控制 ===== -->
+<div class="section-card">
+    <div class="section-header">
+        <i class="bi bi-shield-lock"></i>
+        <h2>八、权限控制</h2>
+    </div>
+    <div class="section-body">
+        <div class="two-col">
+            <div>
+                <h5><span class="badge bg-info me-2">只读</span><code>sys:config:view</code></h5>
+                <div class="p-3 bg-light rounded">
+                    <p class="mb-2"><i class="bi bi-check-circle text-success me-1"></i> 可访问 Index 预览页面</p>
+                    <p class="mb-2"><i class="bi bi-check-circle text-success me-1"></i> 查看所有配置项的当前值</p>
+                    <p class="mb-2"><i class="bi bi-check-circle text-success me-1"></i> 区分各分组和配置说明</p>
+                    <p class="mb-0"><i class="bi bi-x-circle text-danger me-1"></i> 无法进入 Edit 编辑页面</p>
+                </div>
+            </div>
+            <div>
+                <h5><span class="badge bg-warning text-dark me-2">读写</span><code>sys:config:edit</code></h5>
+                <div class="p-3 bg-light rounded">
+                    <p class="mb-2"><i class="bi bi-check-circle text-success me-1"></i> 继承 view 权限的所有能力</p>
+                    <p class="mb-2"><i class="bi bi-check-circle text-success me-1"></i> 可进入 Edit 编辑表单页</p>
+                    <p class="mb-2"><i class="bi bi-check-circle text-success me-1"></i> 可修改所有可编辑配置项</p>
+                    <p class="mb-0"><i class="bi bi-check-circle text-success me-1"></i> 保存后自动刷新缓存</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="mt-4 p-3 border rounded" style="background: linear-gradient(135deg, #f8f9fa, #e9ecef);">
+            <h6><i class="bi bi-info-circle me-1"></i>实现方式</h6>
+            <p class="mb-0">控制器类级别挂着 <code>[PermissionFilter("sys:config:view")]</code>，Edit 的 GET/POST Action 上额外挂着 <code>[PermissionFilter("sys:config:edit")]</code>。具有 edit 权限的角色同时也需要 view 权限，两者叠加形成"查看 → 编辑"的递进式权限体系。</p>
+        </div>
+    </div>
+</div>
+
+<!-- ===== 9. 分组图标说明 ===== -->
+<div class="section-card">
+    <div class="section-header">
+        <i class="bi bi-grid-3x3-gap"></i>
+        <h2>九、分组图标与 Accordion 交互</h2>
+    </div>
+    <div class="section-body">
+        <div class="feature-grid">
+            <div class="feature-item">
+                <i class="bi bi-building" style="font-size:2rem;color:#0d6efd;"></i>
+                <h5>公司信息</h5>
+                <p><code>bi-building</code><br>建筑图标，代表企业实体</p>
+            </div>
+            <div class="feature-item">
+                <i class="bi bi-file-text" style="font-size:2rem;color:#198754;"></i>
+                <h5>单据设置</h5>
+                <p><code>bi-file-text</code><br>文档图标，代表业务单据</p>
+            </div>
+            <div class="feature-item">
+                <i class="bi bi-shield-check" style="font-size:2rem;color:#ffc107;"></i>
+                <h5>安全策略</h5>
+                <p><code>bi-shield-check</code><br>盾牌勾选，代表安全防护</p>
+            </div>
+            <div class="feature-item">
+                <i class="bi bi-bell" style="font-size:2rem;color:#dc3545;"></i>
+                <h5>预警设置</h5>
+                <p><code>bi-bell</code><br>铃铛图标，代表通知提醒</p>
+            </div>
+        </div>
+        <p class="mt-3 text-muted">未匹配到已知分组的配置项会自动归入<strong>"其他设置"</strong>（图标 <code>bi-gear</code> 齿轮），确保新增配置项不会丢失显示。</p>
+    </div>
+</div>
+
+<!-- ===== 10. 技术架构总结 ===== -->
+<div class="section-card">
+    <div class="section-header">
+        <i class="bi bi-layers"></i>
+        <h2>十、技术架构总结</h2>
+    </div>
+    <div class="section-body">
+        <div class="row g-4">
+            <div class="col-md-6">
+                <div class="p-3 border rounded h-100">
+                    <h6><i class="bi bi-hdd-stack text-primary me-1"></i>Models 层</h6>
+                    <table class="table table-sm mb-0">
+                        <tr><td class="text-muted">实体</td><td><code>SysConfig.cs</code> — ORM 到 <code>Sys_Config</code> 表</td></tr>
+                        <tr><td class="text-muted">枚举</td><td><code>ConfigType.cs</code> — 1=String, 2=Number, 3=Boolean, 4=Json</td></tr>
+                        <tr><td class="text-muted">DTO</td><td><code>SystemConfigDto.cs</code> — 传输对象</td></tr>
+                    </table>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="p-3 border rounded h-100">
+                    <h6><i class="bi bi-gear text-success me-1"></i>BLL 层</h6>
+                    <table class="table table-sm mb-0">
+                        <tr><td class="text-muted">接口</td><td><code>ISystemConfigService</code></td></tr>
+                        <tr><td class="text-muted">实现</td><td><code>SystemConfigService.cs</code> — 缓存 + CRUD</td></tr>
+                        <tr><td class="text-muted">缓存</td><td>IMemoryCache, 30min TTL, 键前缀隔离</td></tr>
+                    </table>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="p-3 border rounded h-100">
+                    <h6><i class="bi bi-display text-info me-1"></i>Web 层</h6>
+                    <table class="table table-sm mb-0">
+                        <tr><td class="text-muted">控制器</td><td><code>SystemConfigController.cs</code></td></tr>
+                        <tr><td class="text-muted">分组映射</td><td>KeyGroupMap — ConfigKey → (分组名, 图标)</td></tr>
+                        <tr><td class="text-muted">视图模型</td><td>SystemConfigEditViewModel / ConfigItemViewModel</td></tr>
+                    </table>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="p-3 border rounded h-100">
+                    <h6><i class="bi bi-file-code text-warning me-1"></i>Views 层</h6>
+                    <table class="table table-sm mb-0">
+                        <tr><td class="text-muted">预览页</td><td><code>Index.cshtml</code> — 卡片+表格，条件渲染</td></tr>
+                        <tr><td class="text-muted">编辑页</td><td><code>Edit.cshtml</code> — Accordion + AJAX</td></tr>
+                        <tr><td class="text-muted">种子数据</td><td><code>DataSeed.cs</code> — 12 条初始配置</td></tr>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Footer -->
+<div class="footer">
+    © 2026 设备库存管理系统 (EquipmentIMS) — 系统配置管理模块文档&emsp;|&emsp;由 ASP.NET Core MVC + Bootstrap 5 + SQL Server 驱动
+</div>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

@@ -4,9 +4,9 @@ using EquipmentIMS.Models.Entities;
 
 namespace EquipmentIMS.DAL.Configurations;
 
-public class PurPurchaseInConfiguration : IEntityTypeConfiguration<PurPurchaseIn>
+public class PurPurchaseInConfiguration : BaseEntityConfiguration<PurPurchaseIn>
 {
-    public void Configure(EntityTypeBuilder<PurPurchaseIn> builder)
+    protected override void ConfigureEntity(EntityTypeBuilder<PurPurchaseIn> builder)
     {
         builder.ToTable("Pur_PurchaseIn");
         builder.HasKey(e => e.Id);
@@ -19,6 +19,5 @@ public class PurPurchaseInConfiguration : IEntityTypeConfiguration<PurPurchaseIn
         builder.HasOne(e => e.Supplier).WithMany().HasForeignKey(e => e.SupplierId);
         builder.HasOne(e => e.Warehouse).WithMany().HasForeignKey(e => e.WarehouseId);
         builder.HasMany(e => e.Details).WithOne(d => d.PurchaseIn).HasForeignKey(d => d.PurchaseInId);
-        builder.HasQueryFilter(e => !e.IsDeleted);
     }
 }

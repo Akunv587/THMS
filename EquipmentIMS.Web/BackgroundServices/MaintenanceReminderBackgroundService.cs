@@ -77,7 +77,7 @@ public class MaintenanceReminderBackgroundService : BackgroundService
                 .Select(ur => ur.UserId)
                 .Distinct()
                 .ToListAsync(ct)
-            : new List<long>();
+            : [];
 
         var techs = targetUserIds.Count > 0
             ? await uow.GetRepository<SysUser>().Query()

@@ -4,9 +4,9 @@ using EquipmentIMS.Models.Entities;
 
 namespace EquipmentIMS.DAL.Configurations;
 
-public class PurPurchaseReturnConfiguration : IEntityTypeConfiguration<PurPurchaseReturn>
+public class PurPurchaseReturnConfiguration : BaseEntityConfiguration<PurPurchaseReturn>
 {
-    public void Configure(EntityTypeBuilder<PurPurchaseReturn> builder)
+    protected override void ConfigureEntity(EntityTypeBuilder<PurPurchaseReturn> builder)
     {
         builder.ToTable("Pur_PurchaseReturn");
         builder.HasKey(e => e.Id);
@@ -19,6 +19,5 @@ public class PurPurchaseReturnConfiguration : IEntityTypeConfiguration<PurPurcha
         builder.HasOne(e => e.PurchaseIn).WithMany().HasForeignKey(e => e.PurchaseInId).OnDelete(DeleteBehavior.NoAction);
         builder.HasOne(e => e.Supplier).WithMany().HasForeignKey(e => e.SupplierId);
         builder.HasOne(e => e.Warehouse).WithMany().HasForeignKey(e => e.WarehouseId);
-        builder.HasQueryFilter(e => !e.IsDeleted);
     }
 }

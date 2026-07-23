@@ -20,7 +20,8 @@ public class BackupController : Controller
         _env = env;
     }
 
-    [HttpGet]
+    [HttpGet("")]
+    [HttpGet("Index")]
     public async Task<IActionResult> Index(int page = 1, int pageSize = 20)
     {
         var history = await _service.GetBackupHistoryAsync(page, pageSize);
@@ -46,6 +47,7 @@ public class BackupController : Controller
     }
 
     [HttpPost("Verify/{id}")]
+    [ActionName("Verify")]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Verify(long id)
     {
@@ -55,6 +57,7 @@ public class BackupController : Controller
     }
 
     [HttpGet("Download/{id}")]
+    [ActionName("Download")]
     public async Task<IActionResult> Download(long id)
     {
         var filePath = await _service.GetBackupFilePathAsync(id);

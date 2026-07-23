@@ -4,9 +4,9 @@ using EquipmentIMS.Models.Entities;
 
 namespace EquipmentIMS.DAL.Configurations;
 
-public class MaintRepairOrderConfiguration : IEntityTypeConfiguration<MaintRepairOrder>
+public class MaintRepairOrderConfiguration : BaseEntityConfiguration<MaintRepairOrder>
 {
-    public void Configure(EntityTypeBuilder<MaintRepairOrder> builder)
+    protected override void ConfigureEntity(EntityTypeBuilder<MaintRepairOrder> builder)
     {
         builder.ToTable("Maint_RepairOrder");
         builder.HasKey(e => e.Id);
@@ -28,6 +28,5 @@ public class MaintRepairOrderConfiguration : IEntityTypeConfiguration<MaintRepai
         builder.HasOne(e => e.Customer).WithMany().HasForeignKey(e => e.CustomerId);
         builder.HasOne(e => e.Technician).WithMany().HasForeignKey(e => e.TechnicianId);
         builder.HasMany(e => e.RepairParts).WithOne(p => p.RepairOrder).HasForeignKey(p => p.RepairOrderId);
-        builder.HasQueryFilter(e => !e.IsDeleted);
     }
 }

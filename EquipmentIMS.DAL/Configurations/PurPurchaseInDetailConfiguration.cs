@@ -4,9 +4,9 @@ using EquipmentIMS.Models.Entities;
 
 namespace EquipmentIMS.DAL.Configurations;
 
-public class PurPurchaseInDetailConfiguration : IEntityTypeConfiguration<PurPurchaseInDetail>
+public class PurPurchaseInDetailConfiguration : BaseEntityConfiguration<PurPurchaseInDetail>
 {
-    public void Configure(EntityTypeBuilder<PurPurchaseInDetail> builder)
+    protected override void ConfigureEntity(EntityTypeBuilder<PurPurchaseInDetail> builder)
     {
         builder.ToTable("Pur_PurchaseInDetail");
         builder.HasKey(e => e.Id);

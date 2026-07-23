@@ -4,9 +4,9 @@ using EquipmentIMS.Models.Entities;
 
 namespace EquipmentIMS.DAL.Configurations;
 
-public class BaseProductConfiguration : IEntityTypeConfiguration<BaseProduct>
+public class BaseProductConfiguration : BaseEntityConfiguration<BaseProduct>
 {
-    public void Configure(EntityTypeBuilder<BaseProduct> builder)
+    protected override void ConfigureEntity(EntityTypeBuilder<BaseProduct> builder)
     {
         builder.ToTable("Base_Product");
         builder.HasKey(e => e.Id);
@@ -25,6 +25,5 @@ public class BaseProductConfiguration : IEntityTypeConfiguration<BaseProduct>
         builder.Property(e => e.SalePrice).HasPrecision(18, 2);
         builder.Property(e => e.Remark).HasMaxLength(500);
         builder.HasOne(e => e.Category).WithMany().HasForeignKey(e => e.CategoryId);
-        builder.HasQueryFilter(e => !e.IsDeleted);
     }
 }

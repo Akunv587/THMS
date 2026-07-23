@@ -31,28 +31,31 @@
     @if (ViewBag.ImportResult != null)
     {
         var result = ViewBag.ImportResult as EquipmentIMS.Models.DTOs.ImportResult;
-        <div class="mt-4">
-            <div class="alert @(result.FailCount == 0 ? "alert-success" : "alert-warning")">
-                <strong>导入完成：</strong>
-                总行数 <strong>@result.TotalCount</strong>，
-                成功 <strong>@result.SuccessCount</strong>，
-                失败 <strong>@result.FailCount</strong>
+        if (result != null)
+        {
+            <div class="mt-4">
+                <div class="alert @(result.FailCount == 0 ? "alert-success" : "alert-warning")">
+                    <strong>导入完成：</strong>
+                    总行数 <strong>@result.TotalCount</strong>，
+                    成功 <strong>@result.SuccessCount</strong>，
+                    失败 <strong>@result.FailCount</strong>
+                </div>
+                @if (result.FailCount > 0)
+                {
+                    <table class="table table-sm table-bordered">
+                        <thead><tr><th>行号</th><th>编码</th><th>失败原因</th></tr></thead>
+                        <tbody>
+                            @foreach (var f in result.FailItems)
+                            {
+                                <tr class="text-danger">
+                                    <td>@f.Row</td><td>@f.Code</td><td>@f.Reason</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
             </div>
-            @if (result.FailCount > 0)
-            {
-                <table class="table table-sm table-bordered">
-                    <thead><tr><th>行号</th><th>编码</th><th>失败原因</th></tr></thead>
-                    <tbody>
-                        @foreach (var f in result.FailItems)
-                        {
-                            <tr class="text-danger">
-                                <td>@f.Row</td><td>@f.Code</td><td>@f.Reason</td>
-                            </tr>
-                        }
-                    </tbody>
-                </table>
-            }
-        </div>
+        }
     }
 </div>
 

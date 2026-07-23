@@ -42,13 +42,7 @@ public class CustomerService : ICustomerService
 
         var result = await _repo.GetPagedAsync(page, pageSize, predicate);
 
-        return new PagedResult<CustomerDto>
-        {
-            Items = result.Items.Select(MapToDto).ToList(),
-            TotalCount = result.TotalCount,
-            Page = result.Page,
-            PageSize = result.PageSize
-        };
+        return PagedResult<CustomerDto>.Create(result.Items.Select(MapToDto).ToList(), result.TotalCount, result.Page, result.PageSize);
     }
 
     public async Task<List<CustomerDto>> GetAllAsync(long userId, bool isManager, string? keyword = null)

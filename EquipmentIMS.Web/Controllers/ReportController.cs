@@ -1,7 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using EquipmentIMS.BLL.Interfaces;
 using EquipmentIMS.BLL.Services;
-using EquipmentIMS.DAL.Interfaces;
 using EquipmentIMS.Models.DTOs;
 using EquipmentIMS.Models.DTOs.Reports;
 using EquipmentIMS.Web.Filters;

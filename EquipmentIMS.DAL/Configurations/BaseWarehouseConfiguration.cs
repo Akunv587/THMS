@@ -4,9 +4,9 @@ using EquipmentIMS.Models.Entities;
 
 namespace EquipmentIMS.DAL.Configurations;
 
-public class BaseWarehouseConfiguration : IEntityTypeConfiguration<BaseWarehouse>
+public class BaseWarehouseConfiguration : BaseEntityConfiguration<BaseWarehouse>
 {
-    public void Configure(EntityTypeBuilder<BaseWarehouse> builder)
+    protected override void ConfigureEntity(EntityTypeBuilder<BaseWarehouse> builder)
     {
         builder.ToTable("Base_Warehouse");
         builder.HasKey(e => e.Id);
@@ -16,6 +16,5 @@ public class BaseWarehouseConfiguration : IEntityTypeConfiguration<BaseWarehouse
         builder.Property(e => e.Address).HasMaxLength(500);
         builder.Property(e => e.Manager).HasMaxLength(50);
         builder.Property(e => e.Phone).HasMaxLength(20);
-        builder.HasQueryFilter(e => !e.IsDeleted);
     }
 }

@@ -12,7 +12,8 @@ public class UserController : Controller
 
     public UserController(IUserService service) => _service = service;
 
-    [HttpGet]
+    [HttpGet("")]
+    [HttpGet("Index")]
     public async Task<IActionResult> Index(UserQueryDto query)
     {
         var result = await _service.GetListAsync(query);
@@ -44,6 +45,7 @@ public class UserController : Controller
     }
 
     [HttpGet("Edit/{id}")]
+    [ActionName("Edit")]
     public async Task<IActionResult> Edit(long id)
     {
         var user = await _service.GetByIdAsync(id);
@@ -52,6 +54,7 @@ public class UserController : Controller
     }
 
     [HttpPost("Edit/{id}")]
+    [ActionName("Edit")]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Edit(UserCreateEditDto dto)
     {
@@ -69,6 +72,7 @@ public class UserController : Controller
     }
 
     [HttpPost("Delete/{id}")]
+    [ActionName("Delete")]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Delete(long id)
     {
@@ -77,6 +81,7 @@ public class UserController : Controller
     }
 
     [HttpPost("ResetPassword/{id}")]
+    [ActionName("ResetPassword")]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> ResetPassword(long id)
     {
@@ -86,6 +91,7 @@ public class UserController : Controller
     }
 
     [HttpPost("ToggleActive/{id}")]
+    [ActionName("ToggleActive")]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> ToggleActive(long id)
     {
@@ -94,6 +100,7 @@ public class UserController : Controller
     }
 
     [HttpGet("AssignRoles/{id}")]
+    [ActionName("AssignRoles")]
     public async Task<IActionResult> AssignRoles(long id)
     {
         var dto = await _service.GetAssignRolesAsync(id);
@@ -101,6 +108,7 @@ public class UserController : Controller
     }
 
     [HttpPost("AssignRoles/{id}")]
+    [ActionName("AssignRoles")]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> AssignRoles(long id, List<long> roleIds)
     {

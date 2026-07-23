@@ -18,6 +18,8 @@ public class StockTransactionController : Controller
         _user = user;
     }
 
+    [HttpGet("")]
+    [HttpGet("Index")]
     public async Task<IActionResult> Index(int page = 1, int pageSize = 20,
         DateTime? startTime = null, DateTime? endTime = null,
         long? productId = null, long? warehouseId = null, int? transactionType = null, string? keyword = null)
@@ -105,6 +107,7 @@ public class StockTransactionController : Controller
     }
 
     [HttpGet("CheckExport/{taskId}")]
+    [ActionName("CheckExport")]
     public async Task<IActionResult> CheckExport(Guid taskId)
     {
         var path = await _service.GetExportFilePathAsync(taskId);

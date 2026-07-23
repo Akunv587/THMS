@@ -4,9 +4,9 @@ using EquipmentIMS.Models.Entities;
 
 namespace EquipmentIMS.DAL.Configurations;
 
-public class MaintMaintenancePlanConfiguration : IEntityTypeConfiguration<MaintMaintenancePlan>
+public class MaintMaintenancePlanConfiguration : BaseEntityConfiguration<MaintMaintenancePlan>
 {
-    public void Configure(EntityTypeBuilder<MaintMaintenancePlan> builder)
+    protected override void ConfigureEntity(EntityTypeBuilder<MaintMaintenancePlan> builder)
     {
         builder.ToTable("Maint_MaintenancePlan");
         builder.HasKey(e => e.Id);
@@ -15,6 +15,5 @@ public class MaintMaintenancePlanConfiguration : IEntityTypeConfiguration<MaintM
         builder.Property(e => e.Content).HasMaxLength(2000);
         builder.Property(e => e.Remark).HasMaxLength(500);
         builder.HasOne(e => e.DeviceArchive).WithMany().HasForeignKey(e => e.DeviceArchiveId);
-        builder.HasQueryFilter(e => !e.IsDeleted);
     }
 }

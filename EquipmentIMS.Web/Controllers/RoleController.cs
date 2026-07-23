@@ -12,7 +12,8 @@ public class RoleController : Controller
 
     public RoleController(IRoleService service) => _service = service;
 
-    [HttpGet]
+    [HttpGet("")]
+    [HttpGet("Index")]
     public async Task<IActionResult> Index()
     {
         var roles = await _service.GetListAsync();
@@ -40,6 +41,7 @@ public class RoleController : Controller
     }
 
     [HttpGet("Edit/{id}")]
+    [ActionName("Edit")]
     public async Task<IActionResult> Edit(long id)
     {
         var role = await _service.GetByIdAsync(id);
@@ -48,6 +50,7 @@ public class RoleController : Controller
     }
 
     [HttpPost("Edit/{id}")]
+    [ActionName("Edit")]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Edit(RoleCreateEditDto dto)
     {
@@ -65,6 +68,7 @@ public class RoleController : Controller
     }
 
     [HttpPost("Delete/{id}")]
+    [ActionName("Delete")]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Delete(long id)
     {
@@ -80,6 +84,7 @@ public class RoleController : Controller
     }
 
     [HttpGet("AssignPermissions/{id}")]
+    [ActionName("AssignPermissions")]
     public async Task<IActionResult> AssignPermissions(long id)
     {
         var dto = await _service.GetAssignPermissionsAsync(id);
@@ -87,6 +92,7 @@ public class RoleController : Controller
     }
 
     [HttpPost("AssignPermissions/{id}")]
+    [ActionName("AssignPermissions")]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> AssignPermissions(long id, List<long> permissionIds)
     {

@@ -30,7 +30,7 @@ public class MenuService : IMenuService
             .ToListAsync();
 
         if (roleIds.Count == 0)
-            return new List<MenuDto>();
+            return [];
 
         var permissionIds = await _db.SysRolePermissions
             .Where(rp => roleIds.Contains(rp.RoleId))
@@ -39,7 +39,7 @@ public class MenuService : IMenuService
             .ToListAsync();
 
         if (permissionIds.Count == 0)
-            return new List<MenuDto>();
+            return [];
 
         var permissions = await _db.SysPermissions
             .Where(p => permissionIds.Contains(p.Id)

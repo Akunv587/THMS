@@ -147,7 +147,7 @@ public class ExportBackgroundService : BackgroundService
         for (int i = 0; i < headers.Length; i++)
             sheet.SetColumnWidth(i, 5000);
 
-        workbook.Write(stream, leaveOpen: false);
+        workbook.Write(stream, leaveOpen: true);
 
         await File.WriteAllBytesAsync(filePath, stream.ToArray(), ct);
 

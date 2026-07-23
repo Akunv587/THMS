@@ -20,13 +20,7 @@ public class WarehouseService : IWarehouseService
         var result = await _repo.GetPagedAsync(page, pageSize, string.IsNullOrWhiteSpace(keyword) ? null :
             w => (!w.IsDeleted) && (w.Code.Contains(keyword) || w.Name.Contains(keyword)));
 
-        return new PagedResult<WarehouseDto>
-        {
-            Items = result.Items.Select(MapToDto).ToList(),
-            TotalCount = result.TotalCount,
-            Page = result.Page,
-            PageSize = result.PageSize
-        };
+        return PagedResult<WarehouseDto>.Create(result.Items.Select(MapToDto).ToList(), result.TotalCount, result.Page, result.PageSize);
     }
 
     public async Task<List<WarehouseDto>> GetAllAsync()

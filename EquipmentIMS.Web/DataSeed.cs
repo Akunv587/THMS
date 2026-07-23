@@ -8,7 +8,13 @@ public static class DataSeed
 {
     public static async Task SeedAsync(AppDbContext db)
     {
-        if (db.SysUsers.Any()) return;
+        if (db.SysUsers.Any())
+        {
+            // 增量同步：确保新增的权限已入库
+            await EnsurePermissionsAsync(db);
+            await EnsureConfigsAsync(db);
+            return;
+        }
 
         var now = DateTime.Now;
         var hasher = new Microsoft.AspNetCore.Identity.PasswordHasher<SysUser>();
@@ -238,7 +244,7 @@ public static class DataSeed
         ("sale:out", "销售出库", "sale:menu", "/SaleOut/Index", "bi-box-arrow-up", 32),
         ("sale:return", "销售退货", "sale:menu", "/SaleReturn/Index", "bi-arrow-return-right", 33),
         ("stock:menu", "库存管理", null, "#", "bi-box-seam", 4),
-        ("stock:view", "库存查询", "stock:menu", "/Stock/Index", "bi-search", 41),
+        ("stock:view", "库存查询", "stock:menu", "/Stock", "bi-search", 41),
         ("stock:transfer", "库存调拨", "stock:menu", "/StockTransfer/Index", "bi-arrow-left-right", 42),
         ("stock:check","库存盘点","stock:menu","/StockCheck/Index","bi-clipboard-check",43),
         ("maint:menu","设备维保",null,"#","bi-tools",7),
@@ -248,11 +254,14 @@ public static class DataSeed
         ("report:menu","报表中心",null,"#","bi-bar-chart",5),
         ("report:stock", "库存报表", "report:menu", "/Report/Inventory", "bi-file-earmark-bar-graph", 51),
         ("report:sales", "销售报表", "report:menu", "/Report/Sale", "bi-graph-up", 52),
+        ("report:purchase","采购报表","report:menu","/Report/Purchase","bi-cart-check",53),
+        ("report:repair","维修报表","report:menu","/Report/Repair","bi-tools",54),
         ("sys:menu", "系统管理", null, "#", "bi-gear", 6),
-        ("sys:user", "用户管理", "sys:menu", "/User/Index", "bi-person-badge", 61),
-        ("sys:role", "角色管理", "sys:menu", "/Role/Index", "bi-shield-lock", 62),
-        ("sys:log", "操作日志", "sys:menu", "/Log/Index", "bi-journal-text", 63),
-        ("sys:config", "系统配置", "sys:menu", "/SystemConfig/Index", "bi-sliders", 64),
+        ("sys:user", "用户管理", "sys:menu", "/User", "bi-person-badge", 61),
+        ("sys:role", "角色管理", "sys:menu", "/Role", "bi-shield-lock", 62),
+        ("sys:log", "操作日志", "sys:menu", "/Log", "bi-journal-text", 63),
+        ("sys:config", "系统配置", "sys:menu", "/SystemConfig", "bi-sliders", 64),
+        ("sys:backup","数据备份","sys:menu","/Backup","bi-cloud-arrow-up",65),
     };
 
     // 按钮定义: (Code, Name, ParentMenuCode, Sort)
@@ -280,6 +289,137 @@ public static class DataSeed
         ("sys:role:view","查看","sys:role",0),("sys:role:create","新增","sys:role",1),("sys:role:edit","编辑","sys:role",2),("sys:role:delete","删除","sys:role",3),("sys:role:perm","分配权限","sys:role",4),
         ("sys:log:view","查看","sys:log",0),
         ("sys:config:view","查看","sys:config",0),("sys:config:edit","编辑","sys:config",1),
-        ("sys:backup:view","查看","sys:config",2),("sys:backup:create","创建备份","sys:config",3),
+        ("sys:backup:view","查看","sys:backup",0),("sys:backup:create","创建备份","sys:backup",1),
+        ("sys:backup:download","下载","sys:backup",2),
     };
+
+    /// <summary>
+    /// 增量同步菜单和按钮权限（已有用户时调用，补充新增权限）
+    /// </summary>
+    private static async Task EnsurePermissionsAsync(AppDbContext db)
+    {
+        var now = DateTime.Now;
+        var existingCodes = db.SysPermissions.Select(p => p.PermissionCode).ToHashSet();
+        var changed = false;
+
+        // 更新已有菜单的URL（修复历史数据中不正确的路由）
+        var menuUrlFixMap = new Dictionary<string, string>
+        {
+            ["sys:user"] = "/User",
+            ["sys:role"] = "/Role",
+            ["sys:log"] = "/Log",
+            ["sys:config"] = "/SystemConfig",
+            ["stock:view"] = "/Stock",
+        };
+        var allMenus = db.SysPermissions.Where(p => p.PermissionType == PermissionType.Menu).ToList();
+        foreach (var menu in allMenus)
+        {
+            if (menuUrlFixMap.TryGetValue(menu.PermissionCode, out var correctUrl)
+                && menu.Url != correctUrl)
+            {
+                menu.Url = correctUrl;
+                changed = true;
+            }
+        }
+
+        // 插入缺失的菜单
+        var menuCodeMap = db.SysPermissions
+            .Where(p => p.PermissionType == PermissionType.Menu)
+            .ToDictionary(p => p.PermissionCode, p => p.Id);
+
+        foreach (var m in MenuDefs)
+        {
+            if (existingCodes.Contains(m.Code)) continue;
+            long? pid = m.ParentCode == null ? null
+                : menuCodeMap.TryGetValue(m.ParentCode, out var id) ? id : null;
+            var p = new SysPermission
+            {
+                ParentId = pid, PermissionCode = m.Code, PermissionName = m.Name,
+                PermissionType = PermissionType.Menu, Url = m.Url, Icon = m.Icon,
+                SortOrder = m.Sort, CreateTime = now
+            };
+            db.SysPermissions.Add(p);
+            existingCodes.Add(m.Code);
+            changed = true;
+        }
+        if (changed) await db.SaveChangesAsync();
+
+        // 刷新菜单Map（包含刚插入的）
+        menuCodeMap = db.SysPermissions
+            .Where(p => p.PermissionType == PermissionType.Menu)
+            .ToDictionary(p => p.PermissionCode, p => p.Id);
+        existingCodes = db.SysPermissions.Select(p => p.PermissionCode).ToHashSet();
+
+        // 插入缺失的按钮权限
+        foreach (var (code, name, parentCode, sort) in BtnDefs)
+        {
+            if (existingCodes.Contains(code)) continue;
+            if (!menuCodeMap.TryGetValue(parentCode, out var pid)) continue;
+            db.SysPermissions.Add(new SysPermission
+            {
+                ParentId = pid, PermissionCode = code, PermissionName = name,
+                PermissionType = PermissionType.Button, SortOrder = sort, CreateTime = now
+            });
+            existingCodes.Add(code);
+            changed = true;
+        }
+        if (changed) await db.SaveChangesAsync();
+
+        // 将新增的权限分配给管理员角色
+        if (changed)
+        {
+            var adminRole = db.SysRoles.FirstOrDefault(r => r.RoleCode == "admin");
+            if (adminRole != null)
+            {
+                var allPermIds = db.SysPermissions.Select(p => p.Id).ToList();
+                var existingRolePermIds = db.SysRolePermissions
+                    .Where(rp => rp.RoleId == adminRole.Id)
+                    .Select(rp => rp.PermissionId)
+                    .ToHashSet();
+                foreach (var pid in allPermIds)
+                {
+                    if (!existingRolePermIds.Contains(pid))
+                    {
+                        db.SysRolePermissions.Add(new SysRolePermission
+                        { RoleId = adminRole.Id, PermissionId = pid });
+                    }
+                }
+                await db.SaveChangesAsync();
+            }
+        }
+    }
+
+    /// <summary>
+    /// 增量同步系统配置（已有用户时调用，补充新增配置项）
+    /// </summary>
+    private static async Task EnsureConfigsAsync(AppDbContext db)
+    {
+        var now = DateTime.Now;
+        var existingKeys = db.SysConfigs.Select(c => c.ConfigKey).ToHashSet();
+        var configs = new (string Key, string Name, string Value, string Desc, ConfigType Type)[]
+        {
+            ("CompanyName","公司名称","设备库存管理系统","公司名称",ConfigType.String),
+            ("CompanyAddress","公司地址","","公司地址",ConfigType.String),
+            ("CompanyPhone","联系方式","","公司联系方式",ConfigType.String),
+            ("DocumentPrefix_Purchase","采购单据前缀","CG","采购单据编号前缀",ConfigType.String),
+            ("DocumentPrefix_Sale","销售单据前缀","XS","销售单据编号前缀",ConfigType.String),
+            ("DocumentPrefix_Transfer","调拨单据前缀","DB","调拨单据编号前缀",ConfigType.String),
+            ("StockAlertCheckCron","低库存预警检查时间","08:00","每日预警检查时间（格式 HH:mm）",ConfigType.String),
+            ("PasswordExpiryDays","密码过期天数","90","密码过期天数（0=不限制）",ConfigType.Number),
+            ("MaxLoginAttempts","最大登录失败次数","5","登录失败锁定阈值",ConfigType.Number),
+            ("LockoutMinutes","锁定时间(分钟)","30","登录失败锁定分钟数",ConfigType.Number),
+            ("PasswordHistoryCount","密码历史数量","5","禁止重复使用的历史密码数",ConfigType.Number),
+            ("CreditCheckEnabled","信用额度检查开关","false","是否启用客户信用额度检查",ConfigType.Boolean),
+        };
+        foreach (var c in configs)
+        {
+            if (existingKeys.Contains(c.Key)) continue;
+            db.SysConfigs.Add(new SysConfig
+            {
+                ConfigKey = c.Key, ConfigName = c.Name, ConfigValue = c.Value,
+                Description = c.Desc, ConfigType = c.Type, IsEditable = true, CreateTime = now
+            });
+        }
+        await db.SaveChangesAsync();
+    }
 }

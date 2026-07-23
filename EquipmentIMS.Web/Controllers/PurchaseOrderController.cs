@@ -81,7 +81,7 @@ public class PurchaseOrderController : Controller
         try
         {
             var dto = await _service.GetByIdAsync(id);
-            ViewData["IsManager"] = _user.IsInRole("manager");
+            ViewData["IsManager"] = _user.IsInRole("admin") || _user.IsInRole("manager");
             return View(dto);
         }
         catch (KeyNotFoundException)

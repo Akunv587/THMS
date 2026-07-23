@@ -12,7 +12,8 @@ public class LogController : Controller
 
     public LogController(IOperationLogService service) => _service = service;
 
-    [HttpGet]
+    [HttpGet("")]
+    [HttpGet("Index")]
     public async Task<IActionResult> Index(OperationLogQueryDto query)
     {
         var result = await _service.GetListAsync(query);

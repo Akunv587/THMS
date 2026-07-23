@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using EquipmentIMS.DAL.Interfaces;
 using EquipmentIMS.Models.Entities;
@@ -43,6 +44,25 @@ public class UnitOfWork : IUnitOfWork
     public Task<IDbContextTransaction> BeginTransactionAsync()
     {
         return _context.Database.BeginTransactionAsync();
+    }
+
+    public async Task ExecuteInTransactionAsync(Func<Task> action)
+    {
+        var strategy = _context.Database.CreateExecutionStrategy();
+        await strategy.ExecuteAsync(async () =>
+        {
+            await using var tx = await _context.Database.BeginTransactionAsync();
+            try
+            {
+                await action();
+                await tx.CommitAsync();
+            }
+            catch
+            {
+                await tx.RollbackAsync();
+                throw;
+            }
+        });
     }
 
     public void Dispose()

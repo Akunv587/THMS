@@ -35,7 +35,7 @@ public class CurrentUserService : ICurrentUserService
         {
             var roles = GetClaimValue(ClaimTypes.Role);
             return string.IsNullOrEmpty(roles)
-                ? new List<string>()
+                ? []
                 : roles.Split(',', StringSplitOptions.RemoveEmptyEntries).ToList();
         }
     }

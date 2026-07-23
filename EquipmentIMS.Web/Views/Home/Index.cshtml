@@ -5,48 +5,56 @@
 <!-- 指标卡片 -->
 <div class="row g-3 mb-4">
     <div class="col-lg-4 col-md-6">
-        <div class="stat-card d-flex align-items-center gap-3">
-            <div class="stat-icon bg-primary bg-opacity-10 text-primary">
-                <i class="bi bi-box-seam"></i>
+        <a href="/Report/Inventory" class="text-decoration-none">
+            <div class="stat-card d-flex align-items-center gap-3 stat-card-clickable">
+                <div class="stat-icon bg-primary bg-opacity-10 text-primary">
+                    <i class="bi bi-box-seam"></i>
+                </div>
+                <div class="flex-grow-1">
+                    <div class="stat-value" id="valStock">--</div>
+                    <div class="stat-label">库存总值</div>
+                </div>
             </div>
-            <div class="flex-grow-1">
-                <div class="stat-value" id="valStock">--</div>
-                <div class="stat-label">库存总值</div>
-            </div>
-        </div>
+        </a>
     </div>
     <div class="col-lg-4 col-md-6">
-        <div class="stat-card d-flex align-items-center gap-3">
-            <div class="stat-icon bg-success bg-opacity-10 text-success">
-                <i class="bi bi-graph-up"></i>
+        <a href="/Report/Sale" class="text-decoration-none">
+            <div class="stat-card d-flex align-items-center gap-3 stat-card-clickable">
+                <div class="stat-icon bg-success bg-opacity-10 text-success">
+                    <i class="bi bi-graph-up"></i>
+                </div>
+                <div class="flex-grow-1">
+                    <div class="stat-value" id="valSales">--</div>
+                    <div class="stat-label">本月销售额</div>
+                </div>
             </div>
-            <div class="flex-grow-1">
-                <div class="stat-value" id="valSales">--</div>
-                <div class="stat-label">本月销售额</div>
-            </div>
-        </div>
+        </a>
     </div>
     <div class="col-lg-4 col-md-6">
-        <div class="stat-card d-flex align-items-center gap-3">
-            <div class="stat-icon bg-warning bg-opacity-10 text-warning">
-                <i class="bi bi-cart-check"></i>
+        <a href="/Report/Purchase" class="text-decoration-none">
+            <div class="stat-card d-flex align-items-center gap-3 stat-card-clickable">
+                <div class="stat-icon bg-warning bg-opacity-10 text-warning">
+                    <i class="bi bi-cart-check"></i>
+                </div>
+                <div class="flex-grow-1">
+                    <div class="stat-value" id="valPurchase">--</div>
+                    <div class="stat-label">本月采购额</div>
+                </div>
             </div>
-            <div class="flex-grow-1">
-                <div class="stat-value" id="valPurchase">--</div>
-                <div class="stat-label">本月采购额</div>
-            </div>
-        </div>
+        </a>
     </div>
     <div class="col-lg-4 col-md-6">
-        <div class="stat-card d-flex align-items-center gap-3">
-            <div class="stat-icon bg-info bg-opacity-10 text-info">
-                <i class="bi bi-tools"></i>
+        <a href="/RepairOrder/Index" class="text-decoration-none">
+            <div class="stat-card d-flex align-items-center gap-3 stat-card-clickable">
+                <div class="stat-icon bg-info bg-opacity-10 text-info">
+                    <i class="bi bi-tools"></i>
+                </div>
+                <div class="flex-grow-1">
+                    <div class="stat-value" id="valWorkOrder">--</div>
+                    <div class="stat-label">待处理工单</div>
+                </div>
             </div>
-            <div class="flex-grow-1">
-                <div class="stat-value" id="valWorkOrder">--</div>
-                <div class="stat-label">待处理工单</div>
-            </div>
-        </div>
+        </a>
     </div>
     <div class="col-lg-4 col-md-6">
         <a href="/Stock/Warning" class="text-decoration-none">
@@ -62,7 +70,7 @@
         </a>
     </div>
     <div class="col-lg-4 col-md-6">
-        <a href="javascript:;" class="text-decoration-none" id="linkPendingApproval">
+        <a href="/PurchaseOrder/Index" class="text-decoration-none" id="linkPendingApproval">
             <div class="stat-card d-flex align-items-center gap-3 stat-card-clickable">
                 <div class="stat-icon bg-secondary bg-opacity-10 text-secondary">
                     <i class="bi bi-hourglass-split"></i>

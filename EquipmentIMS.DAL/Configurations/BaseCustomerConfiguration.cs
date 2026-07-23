@@ -4,9 +4,9 @@ using EquipmentIMS.Models.Entities;
 
 namespace EquipmentIMS.DAL.Configurations;
 
-public class BaseCustomerConfiguration : IEntityTypeConfiguration<BaseCustomer>
+public class BaseCustomerConfiguration : BaseEntityConfiguration<BaseCustomer>
 {
-    public void Configure(EntityTypeBuilder<BaseCustomer> builder)
+    protected override void ConfigureEntity(EntityTypeBuilder<BaseCustomer> builder)
     {
         builder.ToTable("Base_Customer");
         builder.HasKey(e => e.Id);
@@ -22,6 +22,5 @@ public class BaseCustomerConfiguration : IEntityTypeConfiguration<BaseCustomer>
         builder.Property(e => e.CreditLimit).HasPrecision(18, 2);
         builder.Property(e => e.UsedCredit).HasPrecision(18, 2);
         builder.Property(e => e.Remark).HasMaxLength(500);
-        builder.HasQueryFilter(e => !e.IsDeleted);
     }
 }

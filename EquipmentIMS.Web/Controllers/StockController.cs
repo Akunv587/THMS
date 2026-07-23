@@ -1,7 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using EquipmentIMS.BLL.Interfaces;
 using EquipmentIMS.Models.DTOs;
-using EquipmentIMS.Models.Enums;
 using EquipmentIMS.Models.Exceptions;
 using EquipmentIMS.Web.Filters;
 
@@ -20,6 +19,8 @@ public class StockController : Controller
         _user = user;
     }
 
+    [HttpGet("")]
+    [HttpGet("Index")]
     public async Task<IActionResult> Index(int page = 1, int pageSize = 20, string? keyword = null,
         long? categoryId = null, long? warehouseId = null, bool? warningOnly = null)
     {
@@ -68,6 +69,7 @@ public class StockController : Controller
     }
 
     [HttpGet("WarningChartData")]
+    [ActionName("WarningChartData")]
     public async Task<IActionResult> GetWarningChartData()
     {
         var stats = await _service.GetWarningStatsAsync();
@@ -139,7 +141,7 @@ public class StockController : Controller
         }
 
         var stream = new MemoryStream();
-        workbook.Write(stream, leaveOpen: false);
+        workbook.Write(stream, leaveOpen: true);
         stream.Position = 0;
 
         return File(stream, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", $"库存预警清单_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx");
@@ -206,7 +208,7 @@ public class StockController : Controller
         sheet.SetColumnWidth(1, 5000);
         sheet.SetColumnWidth(2, 3000);
 
-        workbook.Write(stream, leaveOpen: false);
+        workbook.Write(stream, leaveOpen: true);
         stream.Position = 0;
 
         return File(stream, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "期初库存导入模板.xlsx");

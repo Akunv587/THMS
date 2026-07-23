@@ -25,11 +25,6 @@ public class GenericRepository<T> : IRepository<T> where T : BaseEntity
         return await _dbSet.FindAsync(id);
     }
 
-    public async Task<IEnumerable<T>> GetAllAsync()
-    {
-        return await _dbSet.AsNoTracking().ToListAsync();
-    }
-
     public async Task<IEnumerable<T>> FindAsync(Expression<Func<T, bool>> predicate)
     {
         return await _dbSet.AsNoTracking().Where(predicate).ToListAsync();

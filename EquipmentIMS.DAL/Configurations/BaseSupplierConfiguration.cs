@@ -4,9 +4,9 @@ using EquipmentIMS.Models.Entities;
 
 namespace EquipmentIMS.DAL.Configurations;
 
-public class BaseSupplierConfiguration : IEntityTypeConfiguration<BaseSupplier>
+public class BaseSupplierConfiguration : BaseEntityConfiguration<BaseSupplier>
 {
-    public void Configure(EntityTypeBuilder<BaseSupplier> builder)
+    protected override void ConfigureEntity(EntityTypeBuilder<BaseSupplier> builder)
     {
         builder.ToTable("Base_Supplier");
         builder.HasKey(e => e.Id);
@@ -21,6 +21,5 @@ public class BaseSupplierConfiguration : IEntityTypeConfiguration<BaseSupplier>
         builder.Property(e => e.BankAccount).HasMaxLength(500);
         builder.Property(e => e.BankName).HasMaxLength(100);
         builder.Property(e => e.Remark).HasMaxLength(500);
-        builder.HasQueryFilter(e => !e.IsDeleted);
     }
 }

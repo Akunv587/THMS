@@ -21,4 +21,9 @@ public interface IUnitOfWork : IDisposable
 
     Task<int> SaveChangesAsync();
     Task<IDbContextTransaction> BeginTransactionAsync();
+
+    /// <summary>
+    /// 在重试执行策略中执行事务操作（解决 EnableRetryOnFailure 不支持用户事务的问题）
+    /// </summary>
+    Task ExecuteInTransactionAsync(Func<Task> action);
 }

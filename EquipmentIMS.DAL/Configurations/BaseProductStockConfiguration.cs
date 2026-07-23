@@ -4,9 +4,9 @@ using EquipmentIMS.Models.Entities;
 
 namespace EquipmentIMS.DAL.Configurations;
 
-public class BaseProductStockConfiguration : IEntityTypeConfiguration<BaseProductStock>
+public class BaseProductStockConfiguration : BaseEntityConfiguration<BaseProductStock>
 {
-    public void Configure(EntityTypeBuilder<BaseProductStock> builder)
+    protected override void ConfigureEntity(EntityTypeBuilder<BaseProductStock> builder)
     {
         builder.ToTable("Base_ProductStock");
         builder.HasKey(e => e.Id);
@@ -15,6 +15,5 @@ public class BaseProductStockConfiguration : IEntityTypeConfiguration<BaseProduc
         builder.Property(e => e.RowVersion).IsRowVersion().IsConcurrencyToken();
         builder.HasOne(e => e.Product).WithMany(p => p.ProductStocks).HasForeignKey(e => e.ProductId);
         builder.HasOne(e => e.Warehouse).WithMany().HasForeignKey(e => e.WarehouseId);
-        builder.HasQueryFilter(e => !e.IsDeleted);
     }
 }

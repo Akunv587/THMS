@@ -4,9 +4,9 @@ using EquipmentIMS.Models.Entities;
 
 namespace EquipmentIMS.DAL.Configurations;
 
-public class InvStockTransferConfiguration : IEntityTypeConfiguration<InvStockTransfer>
+public class InvStockTransferConfiguration : BaseEntityConfiguration<InvStockTransfer>
 {
-    public void Configure(EntityTypeBuilder<InvStockTransfer> builder)
+    protected override void ConfigureEntity(EntityTypeBuilder<InvStockTransfer> builder)
     {
         builder.ToTable("Inv_StockTransfer");
         builder.HasKey(e => e.Id);
@@ -19,6 +19,5 @@ public class InvStockTransferConfiguration : IEntityTypeConfiguration<InvStockTr
         builder.HasOne(e => e.FromWarehouse).WithMany().HasForeignKey(e => e.FromWarehouseId).OnDelete(DeleteBehavior.NoAction);
         builder.HasOne(e => e.ToWarehouse).WithMany().HasForeignKey(e => e.ToWarehouseId).OnDelete(DeleteBehavior.NoAction);
         builder.HasMany(e => e.Details).WithOne(d => d.Transfer).HasForeignKey(d => d.TransferId);
-        builder.HasQueryFilter(e => !e.IsDeleted);
     }
 }

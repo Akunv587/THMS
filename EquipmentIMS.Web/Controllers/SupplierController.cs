@@ -10,12 +10,10 @@ namespace EquipmentIMS.Web.Controllers;
 public class SupplierController : Controller
 {
     private readonly ISupplierService _service;
-    private readonly ICurrentUserService _user;
 
-    public SupplierController(ISupplierService service, ICurrentUserService user)
+    public SupplierController(ISupplierService service)
     {
         _service = service;
-        _user = user;
     }
 
     public async Task<IActionResult> Index(string? keyword, int page = 1, int pageSize = 20)
